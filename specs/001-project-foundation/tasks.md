@@ -104,14 +104,14 @@ Every task follows: `- [ ] <TASK_ID> [P?] [USx?] Description with file path`
 **Goal**: select Python and see all 4 phases (tokenize → `ast` tree → symbol table → IR).
 **Independent Test**: golden tests for `samples/hello.py`, `functions.py` produce correct 4-phase output.
 
-- [ ] T022 [P] [US4] Create `backend/python_analyzer.py` wrapping stdlib `tokenize` + `ast`
-- [ ] T023 [P] [US4] Build Python `tokens[]` and CST tree from `ast` at `backend/python_analyzer.py`
-- [ ] T024 [US4] Build Python **symbol table** (functions/vars, scope, statically deterministic type, `value` = literal or `null`) at `backend/python_analyzer.py`
-- [ ] T025 [US4] Produce IR-like three-address output for supported constructs at `backend/python_analyzer.py`
-- [ ] T026 [US4] Report Python syntax errors + static issues with **line and column** (unclosed string, bad indentation, out-of-scope name) at `backend/python_analyzer.py`
-- [ ] T027 [P] [US4] Add Python golden tests at `backend/tests/test_python_pipeline.py` (functions, arithmetic, control flow, prints)
-- [ ] T028 [US4] Add Python subset negative tests (unsupported → clear diagnostic) at `backend/tests/test_python_subset.py`
-- [ ] T029 [P] [US4] Emit Python output in the **SAME JSON schema as C** (unify `backend/contract.py`); route `/api/compile` Python path via `language` (FR-012/FR-014)
+- [x] T022 [P] [US4] Create `backend/python_analyzer.py` wrapping stdlib `tokenize` + `ast`
+- [x] T023 [P] [US4] Build Python `tokens[]` and CST tree from `ast` at `backend/python_analyzer.py`
+- [x] T024 [US4] Build Python **symbol table** (functions/vars, scope, statically deterministic type, `value` = literal or `null`) at `backend/python_analyzer.py`
+- [x] T025 [US4] Produce IR-like three-address output for supported constructs at `backend/python_analyzer.py`
+- [x] T026 [US4] Report Python syntax errors + static issues with **line and column** (unclosed string, bad indentation, out-of-scope name) at `backend/python_analyzer.py`
+- [x] T027 [P] [US4] Add Python golden tests at `backend/tests/test_python_pipeline.py` (functions, arithmetic, control flow, prints)
+- [x] T028 [US4] Add Python subset negative tests (unsupported → clear diagnostic) at `backend/tests/test_python_subset.py`
+- [x] T029 [P] [US4] Emit Python output in the **SAME JSON schema as C** (unify `backend/contract.py`); route `/api/compile` Python path via `language` (FR-012/FR-014)
 
 **Checkpoint**: Python pipeline independently functional and testable — SC-004.
 
