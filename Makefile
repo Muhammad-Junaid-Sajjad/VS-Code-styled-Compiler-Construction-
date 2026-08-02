@@ -43,8 +43,8 @@ compiler:
 run: setup-backend
 	$(VENV_PY) $(BACKEND)/app.py
 
-run-prod:
-	@echo "TODO (T054a): production WSGI server (Waitress/Gunicorn), debug=False"
+run-prod: setup-backend
+	$(VENV_PY) $(BACKEND)/wsgi.py
 
 ## ── Test (FR-052) ──────────────────────────────────────────────────────────
 test: compiler setup-backend

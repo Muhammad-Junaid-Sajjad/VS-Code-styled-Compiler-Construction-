@@ -12,13 +12,42 @@ from lexer_parser    import parse_compiler_output
 from tree_builder    import build_tree
 from contract import CompileResponse, Phases, LANGUAGES
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DIST_DIR = os.path.normpath(os.path.join(BASE_DIR, '..', 'frontend', 'dist'))
+
 # ─────────────────────────────────────────────────────────────────────────────
-#  Flask app setup
-#  CORS is widened here only for local dev; tightened to an allowlist in T054b.
+#  Flask app setup — CORS restricted to the serving origin(s) (T054b / FR-056)
 # ─────────────────────────────────────────────────────────────────────────────
 
-app = Flask(__name__)
-CORS(app)
+# Origins that may call the API: the built SPA's origin and the Vite dev server.
+ALLOWED_ORIGINS = [
+    o.strip() for o in os.environ.get('ALLOWED_ORIGINS', 'http://localhost:5000,http://127.0.0.1:5000,http://localhost:5173').split(',')
+    if o.strip()
+]
+
+app = Flask(__name__, static_folder=DIST_DIR if os.path.isdir(DIST_DIR) else None, static_url_path='')
+CORS(app, resources={r"/api/*": {"origins": ALLOWED_ORIGINS}})
+
+# Security headers (T054b / FR-056)
+@app.after_request
+def _security_headers(resp):
+    resp.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    resp.headers.setdefault('X-Frame-Options', 'DENY')
+    resp.headers.setdefault('Referrer-Policy', 'no-referrer')
+    resp.headers.setdefault('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
+    return resp
+
+# Serve the built SPA + unknown-route → index.html fallback (T054 / FR-046)
+if os.path.isdir(DIST_DIR):
+    @app.route('/')
+    def _index():
+        return app.send_static_file('index.html')
+
+    @app.errorhandler(404)
+    def _spa_fallback(_e):
+        if request.path.startswith('/api/'):
+            return jsonify({'success': False, 'error': 'Not found.'}), 404
+        return app.send_static_file('index.html')
 
 # 1 MB request-body cap → Flask returns HTTP 413 automatically (T013 / FR-058)
 app.config['MAX_CONTENT_LENGTH'] = 1_000_000
