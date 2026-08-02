@@ -21,11 +21,11 @@ Every task follows: `- [ ] <TASK_ID> [P?] [USx?] Description with file path`
 - [x] T001 Create root `Makefile` with targets `all`, `setup`, `run`, `test`, `clean`, `run-prod`, `lint`, `format`, `check` at `/Makefile`
 - [x] T002 [P] Create `compiler/Makefile` emitting the binary named `compiler` at `/compiler/Makefile` — **use the verified working recipe** `lex lexer.l; yacc -d -v parser.y; gcc -w -o compiler y.tab.c`. **Do NOT use `-ll`** — on modern toolchains `gcc -ll` links `libl`'s own `main` and fails with "multiple definition of `main`" (verified). `yyerror` and `yywrap` are defined in `parser.y`/`lexer.l`, so no `-l*` library is required. Add a build smoke test: `compiler/input1.c` (fed via stdin) compiles and prints all four `PHASE n:` sections.
 - [x] T003 [P] Pin `backend/requirements.txt` with exact versions (`flask==3.1.3`, `flask-cors==6.0.2`, `pytest==8.x`) for reproducibility at `/backend/requirements.txt`
-- [ ] T003a [P] Pin the Node toolchain via `frontend/.nvmrc` (or `package.json` `engines.node`) and use `npm ci` (lockfile-exact install) in `make setup` at `/frontend/`
-- [ ] T004 [P] Scaffold `frontend/` with pinned `package.json`, `tsconfig.json`, `vite.config.ts` and commit `package-lock.json` for determinism (FR-045/FR-047) at `/frontend/package.json`
+- [x] T003a [P] Pin the Node toolchain via `frontend/.nvmrc` (or `package.json` `engines.node`) and use `npm ci` (lockfile-exact install) in `make setup` at `/frontend/`
+- [x] T004 [P] Scaffold `frontend/` with pinned `package.json`, `tsconfig.json`, `vite.config.ts` and commit `package-lock.json` for determinism (FR-045/FR-047) at `/frontend/package.json`
 - [x] T005 [P] Create `backend/tests/`, `frontend/tests/`, and `e2e/` directories with **a minimal smoke-test fixture** (a trivially valid C sample string) so no phase ships "empty-but-green" at `/backend/tests/`, `/frontend/tests/`, `/e2e/`
-- [ ] T006 [P] Seed the sample-program catalog constant (plan §4.4, FR-059) at `/frontend/src/samples/catalog.ts` — entries: `hello.c`, `arithmetic.c`, `factorial.c` (**iterative — no user functions per §5.9**), `input1.c`, `input2.c`, `input3.c`, `test.c`, `hello.py`, `functions.py`
-- [ ] T007 Add frontend install instructions (`npm install` / `npm ci`) into README for `make setup` at `/README.md`
+- [x] T006 [P] Seed the sample-program catalog constant (plan §4.4, FR-059) at `/frontend/src/samples/catalog.ts` — entries: `hello.c`, `arithmetic.c`, `factorial.c` (**iterative — no user functions per §5.9**), `input1.c`, `input2.c`, `input3.c`, `test.c`, `hello.py`, `functions.py`
+- [x] T007 Add frontend install instructions (`npm install` / `npm ci`) into README for `make setup` at `/README.md`
 
 **Checkpoint**: `make clean && make` builds from scratch; the compiler binary named `compiler` is produced by the working recipe (no `-ll`).
 
@@ -36,7 +36,7 @@ Every task follows: `- [ ] <TASK_ID> [P?] [USx?] Description with file path`
 **Purpose**: blocking infrastructure every story needs. **⚠️ This phase also unblocks the currently-broken `/api/compile` endpoint (verified: it returns HTTP 500 on every C request today). No story work before this completes.**
 
 - [x] T008 Create the canonical response schema/types: backend dataclass in `backend/contract.py` and TS mirror in `frontend/src/types/contract.ts` (fields: `success, language, tokens, parse_tree, symbol_table, ir_code, errors, warnings, phases, raw_output`) — `language` is REQUIRED here (the current `app.py` response omits it)
-- [ ] T008a [P] Add a frontend **runtime response validator** (Zod `frontend/src/validators.ts`) validating the `/api/compile` response at the client boundary so a malformed payload fails loudly into an error toast (depends on T008)
+- [x] T008a [P] Add a frontend **runtime response validator** (Zod `frontend/src/validators.ts`) validating the `/api/compile` response at the client boundary so a malformed payload fails loudly into an error toast (depends on T008)
 - [x] T009 [P] Define `Token`, `Symbol`, `Diagnostic`, `Instruction`, `Phases` types in `backend/contract.py` and `frontend/src/types/contract.ts` per plan §5 — **Symbol `value` = compile-time constant initializer or `null` (FR-038); every Diagnostic carries `level/message/line/col` (FR-016)**
 - [x] T010 [P] Harden `backend/compiler_runner.py`: add output-size cap (1 MB) and subprocess resource/address-space limits; keep the 10 s timeout; enforce temp-file hygiene; **no shell interpolation** of user code
 - [x] T010a [P] **Fix the stdin-vs-argv contract: feed source via stdin.** The binary reads source from **stdin** (`./compiler < file`), not argv (`./compiler file` → `syntax error`). Change `run_compiler` to `subprocess.run([binary], input=source_code, ...)` and add a regression test asserting a valid sample returns `PHASE 1:` output at `backend/compiler_runner.py`
@@ -46,10 +46,10 @@ Every task follows: `- [ ] <TASK_ID> [P?] [USx?] Description with file path`
 - [x] T012 [P] Implement the **spec-accurate** error taxonomy in `backend/app.py` per FR-021…FR-024: HTTP **400** (malformed JSON / missing `code` / bad `language`), **502** (backend/compiler unavailable), **504** (10 s timeout, `success:false` + clear message), **200 + `success:false`** (empty input with a full empty-state-safe payload). **Do NOT use HTTP 422 — the spec defines no such code**
 - [x] T012a [P] Implement/verify `POST /api/tokenize` returns tokens even when the full pipeline fails (FR-017): add a regression test covering valid and invalid input at `backend/tests/test_tokenize.py` (depends on T010b's `_fallback_tokenise` fix)
 - [x] T013 [P] Add request-body size limit (1 MB → HTTP 413) and per-language readiness fields to `/api/status` (FR-018) in `backend/app.py`
-- [ ] T014 [P] Add structured logging per compile call (language, phases, success, latency, token count — **never the source code**) in `backend/app.py` and `backend/compiler_runner.py`
-- [ ] T015 [P] Build `frontend/src/api/client.ts` typed fetch wrapper mapping HTTP codes → toasts/empty-states (uses the T008a validator on responses)
-- [ ] T015a [P] Handle non-ASCII/unicode source and very large compile JSON gracefully in `frontend/src/api/client.ts` (encoding-safe transport, response-size guard) — add a pairing test in `frontend/tests/client.test.ts`
-- [ ] T015b [P] Add a **compile concurrency guard**: serialize or rate-limit concurrent `/api/compile` requests (subprocess is a high-abuse vector) in `backend/app.py` (global lock or per-IP throttle returning 429)
+- [x] T014 [P] Add structured logging per compile call (language, phases, success, latency, token count — **never the source code**) in `backend/app.py` and `backend/compiler_runner.py`
+- [x] T015 [P] Build `frontend/src/api/client.ts` typed fetch wrapper mapping HTTP codes → toasts/empty-states (uses the T008a validator on responses)
+- [x] T015a [P] Handle non-ASCII/unicode source and very large compile JSON gracefully in `frontend/src/api/client.ts` (encoding-safe transport, response-size guard) — add a pairing test in `frontend/tests/client.test.ts`
+- [x] T015b [P] Add a **compile concurrency guard**: serialize or rate-limit concurrent `/api/compile` requests (subprocess is a high-abuse vector) in `backend/app.py` (global lock or per-IP throttle returning 429)
 
 **Checkpoint (P0 gate — non-empty, NOT "empty-but-green")**: `POST /api/compile` with a valid C sample returns **HTTP 200** with a schema-valid payload containing non-empty `tokens`; `make clean && make` rebuilds; SC-009.
 
@@ -130,17 +130,17 @@ Every task follows: `- [ ] <TASK_ID> [P?] [USx?] Description with file path`
 
 **Independent Test**: browser manually — resize, Ctrl+Enter, tab navigation all work.
 
-- [ ] T033 [P] [US2] Build the VS Code shell (`TitleBar`, `ActivityBar`, `StatusBar`, `Editor`, `BottomPanel`, `RightPanel`) in `frontend/src/App.ts` using the store
-- [ ] T034 [P] [US2] Integrate CodeMirror 6 editor with C/Python modes, line numbers, bracket matching, auto-close in `frontend/src/components/Editor.ts`
-- [ ] T035 [P] [US2] Add `Ctrl+Enter` run binding + language selector writing to `frontend/src/state/store.ts`
-- [ ] T036 [US2] Set up the typed state store (`zustand`) with `language`, `editorCode`, `activeTab`, `result`, `phases`, `running`, `toast`, `currentFile` at `frontend/src/state/store.ts`
-- [ ] T037 [US2] Wire `frontend/src/api/client.ts` + phases + toasts to store; Run button `running` loading state (FR-030/FR-043)
-- [ ] T038 [P] [US2] Implement responsive resize handling; verify no fixed-width breakage at `frontend/src/App.ts`
-- [ ] T038a [P] [US2] Build the Tokens panel renderer (color-coded by token type with line numbers, grouped by source line) at `frontend/src/components/panels/Tokens.tsx` (FR-036)
-- [ ] T038b [P] [US2] Build the IR Code panel renderer (three-address lines with line numbers and syntax highlighting) at `frontend/src/components/panels/IR.tsx` (FR-039)
-- [ ] T038c [P] [US2] Build the Diagnostics panel renderer (severity icons, line numbers, colors) at `frontend/src/components/panels/Diagnostics.tsx` (FR-040)
-- [ ] T038d [P] [US2] Build the Parse Tree panel renderer (collapsible tree from `parse_tree`) at `frontend/src/components/panels/ParseTree.tsx` (FR-037)
-- [ ] T038e [P] [US2] Build the Phase Flow panel (animated Waiting → Running → Done → Error, driven by the store `phases` state — **not timed delays**) at `frontend/src/components/panels/PhaseFlow.tsx` (FR-035)
+- [x] T033 [P] [US2] Build the VS Code shell (`TitleBar`, `ActivityBar`, `StatusBar`, `Editor`, `BottomPanel`, `RightPanel`) in `frontend/src/App.ts` using the store
+- [x] T034 [P] [US2] Integrate CodeMirror 6 editor with C/Python modes, line numbers, bracket matching, auto-close in `frontend/src/components/Editor.ts`
+- [x] T035 [P] [US2] Add `Ctrl+Enter` run binding + language selector writing to `frontend/src/state/store.ts`
+- [x] T036 [US2] Set up the typed state store (`zustand`) with `language`, `editorCode`, `activeTab`, `result`, `phases`, `running`, `toast`, `currentFile` at `frontend/src/state/store.ts`
+- [x] T037 [US2] Wire `frontend/src/api/client.ts` + phases + toasts to store; Run button `running` loading state (FR-030/FR-043)
+- [x] T038 [P] [US2] Implement responsive resize handling; verify no fixed-width breakage at `frontend/src/App.ts`
+- [x] T038a [P] [US2] Build the Tokens panel renderer (color-coded by token type with line numbers, grouped by source line) at `frontend/src/components/panels/Tokens.tsx` (FR-036)
+- [x] T038b [P] [US2] Build the IR Code panel renderer (three-address lines with line numbers and syntax highlighting) at `frontend/src/components/panels/IR.tsx` (FR-039)
+- [x] T038c [P] [US2] Build the Diagnostics panel renderer (severity icons, line numbers, colors) at `frontend/src/components/panels/Diagnostics.tsx` (FR-040)
+- [x] T038d [P] [US2] Build the Parse Tree panel renderer (collapsible tree from `parse_tree`) at `frontend/src/components/panels/ParseTree.tsx` (FR-037)
+- [x] T038e [P] [US2] Build the Phase Flow panel (animated Waiting → Running → Done → Error, driven by the store `phases` state — **not timed delays**) at `frontend/src/components/panels/PhaseFlow.tsx` (FR-035)
 
 **Checkpoint**: IDE shell operational; **all five panel renderers (T038a–T038e)** plus both bottom (`Tokens/IR/Diagnostics`) and right (`PhaseFlow/ParseTree/SymbolTable`) panels wired and driven by real `phases` state (not timed delays).
 
@@ -151,10 +151,10 @@ Every task follows: `- [ ] <TASK_ID> [P?] [USx?] Description with file path`
 **Goal**: click a sample → editor loads it; `.py` flips the language selector.
 **Independent Test**: each of 9 catalog entries loads correct source and corrects language.
 
-- [ ] T039 [P] [US7] Implement `Explorer` listing the `catalog.ts` entries by language in `frontend/src/components/Explorer.ts`
+- [x] T039 [P] [US7] Implement `Explorer` listing the `catalog.ts` entries by language in `frontend/src/components/Explorer.ts`
 - [ ] T039a [US7] **Author §5.9-compliant samples (FR-059):** write/rewrite `hello.c`, `arithmetic.c`, `factorial.c` (iterative — no user functions) and Python samples so **every catalog entry compiles through all 4 phases**. Replace the current out-of-subset frontend samples (`printf("%d", sum)`, recursion) in `frontend/src/samples/catalog.ts`
-- [ ] T040 [US7] On click, set code+`language` (`.c`→`c`, `.py`→`python`) and the active tab name in `frontend/src/components/Explorer.ts` + `frontend/src/state/store.ts`
-- [ ] T041 [US7] Add frontend Vitest tests asserting sample→language flip at `frontend/tests/explorer.test.ts`
+- [x] T040 [US7] On click, set code+`language` (`.c`→`c`, `.py`→`python`) and the active tab name in `frontend/src/components/Explorer.ts` + `frontend/src/state/store.ts`
+- [x] T041 [US7] Add frontend Vitest tests asserting sample→language flip at `frontend/tests/explorer.test.ts`
 
 ---
 
@@ -163,10 +163,10 @@ Every task follows: `- [ ] <TASK_ID> [P?] [USx?] Description with file path`
 **Goal**: deterministic local autocomplete (keywords + declared symbols), no network.
 **Independent Test**: typing shows keyword list (Tier 1); typing a symbol from last compile result (Tier 2) is suggested; Enter/Tab inserts.
 
-- [ ] T042 [P] [US8] Create CodeMirror autocomplete source `frontend/src/components/Completion.ts` with Tier 1 keyword sets per language (FR-025)
-- [ ] T043 [P] [US8] Add Tier 2 source from `store.result.symbol_table` (vars/functions/params; signature preview) in `frontend/src/components/Completion.ts` (FR-026)
-- [ ] T044 [US8] Trigger on typing at cursor, accept via Enter/Tab (FR-027); map active language at trigger time (FR-025/FR-029)
-- [ ] T045 [US8] Add a Vitest asserting no HTTP call is made during completion (FR-028) at `frontend/tests/autocomplete.test.ts`
+- [x] T042 [P] [US8] Create CodeMirror autocomplete source `frontend/src/components/Completion.ts` with Tier 1 keyword sets per language (FR-025)
+- [x] T043 [P] [US8] Add Tier 2 source from `store.result.symbol_table` (vars/functions/params; signature preview) in `frontend/src/components/Completion.ts` (FR-026)
+- [x] T044 [US8] Trigger on typing at cursor, accept via Enter/Tab (FR-027); map active language at trigger time (FR-025/FR-029)
+- [x] T045 [US8] Add a Vitest asserting no HTTP call is made during completion (FR-028) at `frontend/tests/autocomplete.test.ts`
 
 ---
 
@@ -175,11 +175,11 @@ Every task follows: `- [ ] <TASK_ID> [P?] [USx?] Description with file path`
 **Goal**: all error paths handled gracefully with clear messages; no crashes.
 **Independent Test**: feed invalid/edge inputs; assert correct diagnostic + no crash + correct UI state.
 
-- [ ] T046 [P] [US6] Backend negative tests at `backend/tests/test_edge_cases.py`: empty input → **HTTP 200 + `success:false`** (FR-024), non-C/Python content → clear error, missing binary → **502** (FR-023), timeout → **504** (FR-022), oversized body → 413
-- [ ] T047 [P] [US6] Frontend empty-state messages for each panel before any run at `frontend/src/components/panels/*` (FR-042)
-- [ ] T048 [US6] Connection-error handling in `frontend/src/api/client.ts`: missing binary → "Compiler binary not found…", server down → "Cannot reach server…" (FR-044)
+- [x] T046 [P] [US6] Backend negative tests at `backend/tests/test_edge_cases.py`: empty input → **HTTP 200 + `success:false`** (FR-024), non-C/Python content → clear error, missing binary → **502** (FR-023), timeout → **504** (FR-022), oversized body → 413
+- [x] T047 [P] [US6] Frontend empty-state messages for each panel before any run at `frontend/src/components/panels/*` (FR-042)
+- [x] T048 [US6] Connection-error handling in `frontend/src/api/client.ts`: missing binary → "Compiler binary not found…", server down → "Cannot reach server…" (FR-044)
 - [ ] T049 [P] [US6] Large-input virtualized rendering (5,000+ tokens / 2,000+ lines) for Tokens + Parse Tree + boundary test at `frontend/src/components/panels/Tokens.ts` and `frontend/tests/large_input.test.ts`
-- [ ] T050 [US6] Toast for success/failure in `frontend/src/components/Toast.ts` (FR-043)
+- [x] T050 [US6] Toast for success/failure in `frontend/src/components/Toast.ts` (FR-043)
 
 ---
 
@@ -188,8 +188,8 @@ Every task follows: `- [ ] <TASK_ID> [P?] [USx?] Description with file path`
 **Goal**: sortable, complete symbol table panel.
 **Independent Test**: sort by name/type/scope/value/line; data matches compile result; `value` shows the const initializer or `null` (FR-038).
 
-- [ ] T051 [P] [US3] Implement sortable `SymbolTable` panel reading `symbol_table` in `frontend/src/components/panels/SymbolTable.ts` (FR-038)
-- [ ] T052 [P] [US3] Add sorting + column-render Vitest at `frontend/tests/symbol_table.test.ts`
+- [x] T051 [P] [US3] Implement sortable `SymbolTable` panel reading `symbol_table` in `frontend/src/components/panels/SymbolTable.ts` (FR-038)
+- [x] T052 [P] [US3] Add sorting + column-render Vitest at `frontend/tests/symbol_table.test.ts`
 
 ---
 
@@ -197,7 +197,7 @@ Every task follows: `- [ ] <TASK_ID> [P?] [USx?] Description with file path`
 
 Purpose: multi-story quality, E2E, docs, release gates.
 
-- [ ] T053 Produce the deterministic frontend `dist/` bundle built by `make run` (FR-045)
+- [x] T053 Produce the deterministic frontend `dist/` bundle built by `make run` (FR-045)
 - [ ] T054 Serve built SPA from Flask with unknown-route → index.html fallback (FR-046) in `backend/app.py`
 - [ ] T054a Serve the app under a **production WSGI server** (Waitress in-process or Gunicorn) with `debug=False`, `host=0.0.0.0`; add `make run-prod` — remove the current `app.run(debug=True)` dev default for production
 - [ ] T054b Implement **CORS allowlist** (only the serving origin) + security headers (CSP, X-Content-Type-Options) instead of the current wide-open `CORS(app)` in `backend/app.py` (FR-056)
