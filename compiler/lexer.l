@@ -47,7 +47,7 @@ unary "++"|"--"
 "*"                         { strcpy(yylval.nd_obj.name,(yytext)); return MULTIPLY; }
 "%"                         { strcpy(yylval.nd_obj.name,(yytext)); return MODULO; }
 \/\/.*                      { ; }
-\/\*(.*\n)*.*\*\/           { ; } 
+\/\*(.*\n)*.*\*\/           { int _n; for(_n=0; yytext[_n]; _n++) if(yytext[_n]=='\n') countn++; }
 [ \t]*                      { ; }
 [\n]                        { countn++; }
 .	                        { return *yytext; }
