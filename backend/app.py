@@ -90,6 +90,14 @@ def compile_code():
                         'error': 'Another compilation is in progress. Try again shortly.'}), 429
 
     try:
+        # Python pipeline is in-process (stdlib tokenize + ast) — same schema (FR-012/T029)
+        if language == 'python':
+            from python_analyzer import analyze_python
+            result = analyze_python(source_code)
+            _log_compile(language, result['success'], 200, start,
+                         len(result['tokens']), len(result['errors']), len(result['warnings']))
+            return jsonify(result), 200
+
         run_result = run_compiler(source_code)
 
         # Fatal runner errors: binary missing → 502; timeout → 504 (FR-022/FR-023)
