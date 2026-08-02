@@ -13,7 +13,7 @@ export function emptyState(el: HTMLElement, icon: string, title: string, sub: st
     <div class="empty-state-sub">${esc(sub)}</div></div>`;
 }
 
-/** FR-036 — color-coded tokens grouped by source line. */
+/** FR-036 — color-coded tokens grouped by source line, with a total count. */
 export function renderTokens(el: HTMLElement, tokens: Token[]): void {
   if (!tokens.length) return emptyState(el, '🔤', 'No tokens', 'The compiler produced no tokens.');
   const byLine = new Map<number, Token[]>();
@@ -22,7 +22,7 @@ export function renderTokens(el: HTMLElement, tokens: Token[]): void {
     if (!byLine.has(ln)) byLine.set(ln, []);
     byLine.get(ln)!.push(t);
   }
-  let html = '';
+  let html = `<div class="token-count">Total tokens: ${tokens.length}</div>`;
   [...byLine.entries()].sort((a, b) => a[0] - b[0]).forEach(([ln, toks]) => {
     html += `<div class="token-line"><span class="token-ln">${ln}</span>`;
     for (const t of toks) {
