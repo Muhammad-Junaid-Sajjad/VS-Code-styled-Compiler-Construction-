@@ -338,6 +338,14 @@ expression: expression arithmetic expression %prec ADD {
 	}
 }
 | value { strcpy($$.name, $1.name); sprintf($$.type, $1.type); $$.nd = $1.nd; }
+| SUBTRACT expression %prec UNARY {
+	/* unary minus (T016e fix): `-5` is 0 - 5 in three-address form */
+	sprintf($$.type, $2.type);
+	sprintf($$.name, "t%d", temp_var);
+	sprintf(icg[ic_idx++], "%s = 0 - %s\n", $$.name, $2.name);
+	temp_var++;
+	$$.nd = mknode(NULL, $2.nd, "-");
+}
 ;
 
 arithmetic: ADD

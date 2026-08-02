@@ -28,8 +28,8 @@ unary "++"|"--"
 ^"#include"[ ]*<.+\.h>      { strcpy(yylval.nd_obj.name,(yytext)); return INCLUDE; }
 "true"                      { strcpy(yylval.nd_obj.name,(yytext)); return TRUE; }
 "false"                     { strcpy(yylval.nd_obj.name,(yytext)); return FALSE; }
-[-]?{digit}+                { strcpy(yylval.nd_obj.name,(yytext)); return NUMBER; }
-[-]?{digit}+\.{digit}{1,6}  { strcpy(yylval.nd_obj.name,(yytext)); return FLOAT_NUM; }
+{digit}+                    { strcpy(yylval.nd_obj.name,(yytext)); return NUMBER; }
+{digit}+\.{digit}{1,6}      { strcpy(yylval.nd_obj.name,(yytext)); return FLOAT_NUM; }
 {alpha}({alpha}|{digit})*   { strcpy(yylval.nd_obj.name,(yytext)); return ID; }
 {unary}                     { strcpy(yylval.nd_obj.name,(yytext)); return UNARY; }
 "<="                        { strcpy(yylval.nd_obj.name,(yytext)); return LE; }
