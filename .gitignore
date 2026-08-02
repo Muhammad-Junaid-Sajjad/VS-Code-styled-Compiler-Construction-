@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+*.egg-info/
+dist/
+.pytest_cache/
+
+# Node / TypeScript / frontend
+node_modules/
+frontend/dist/
+frontend/build/
+*.log
+.env*
+coverage/
+.DS_Store
+
+# C compiler build artifacts
+compiler/lex.yy.c
+compiler/y.tab.c
+compiler/y.tab.h
+compiler/y.output
+compiler/*.o
+compiler/compiler
+compiler/a.out
+
+# Test / tooling
+*.tmp
+*.swp
+.vscode/
+.idea/
