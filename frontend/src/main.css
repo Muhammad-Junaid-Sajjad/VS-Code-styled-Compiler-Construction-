@@ -155,3 +155,28 @@ html, body { height: 100%; overflow: hidden; background: #111; }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 4px; }
+
+/* Light theme (T060a) */
+[data-theme="light"] {
+  --bg-base: #ffffff; --bg-sidebar: #f3f3f3; --bg-panel: #f3f3f3;
+  --bg-tab-active: #ffffff; --bg-tab-bar: #ececec; --bg-activity: #333333;
+  --bg-titlebar: #dddddd; --bg-statusbar: #007acc; --bg-input: #3c3c3c;
+  --border: #e0e0e0; --border-subtle: #e5e5e5;
+  --accent: #007acc; --accent-green: #137c5c; --accent-yellow: #b5a642;
+  --accent-orange: #a65d36; --accent-red: #c93b3b; --accent-purple: #8a5bb0;
+  --accent-blue: #1a6fb5; --accent-number: #2d7a3d;
+  --text-primary: #1e1e1e; --text-muted: #5a5a5a; --text-dim: #8a8a8a; --text-white: #fff;
+}
+[data-theme="light"] .cm-editor { background: #ffffff; color: #1e1e1e; }
+[data-theme="light"] .tok-KEYWORD { background: #e3ecf5; color: #1a6fb5; }
+[data-theme="light"] .tok-IDENTIFIER { background: #e2f0ec; color: #137c5c; }
+[data-theme="light"] .tok-OPERATOR { background: #f5ead0; color: #8a5a00; }
+[data-theme="light"] .tok-NUMBER { background: #e9f0e2; color: #2d7a3d; }
+[data-theme="light"] .tok-STRING { background: #f7e4dc; color: #a65d36; }
+[data-theme="light"] .tok-TYPE { background: #e5eef7; color: #1a6fb5; }
+[data-theme="light"] .tok-PUNCTUATION { background: #efefef; color: #555; }
+[data-theme="light"] .tl-prog { background: rgba(0,122,204,.1); color: #1a6fb5; }
+[data-theme="light"] .tl-decl { background: rgba(197,134,192,.1); color: #8a5bb0; }
+[data-theme="light"] .tl-stmt { background: rgba(78,201,176,.1); color: #137c5c; }
+[data-theme="light"] .tl-leaf { background: rgba(206,145,120,.1); color: #a65d36; }
+[data-theme="light"] .tl-type { background: rgba(86,156,214,.1); color: #1a6fb5; }

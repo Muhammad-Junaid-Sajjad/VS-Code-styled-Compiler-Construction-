@@ -54,6 +54,7 @@ export function mountApp(root: HTMLElement): void {
   </div>
   <div id="statusbar">
     <div class="sb-item" id="sb-status">● Ready</div>
+    <div class="sb-item" id="sb-theme" title="Toggle theme" role="button" aria-label="Toggle light/dark theme">🌓</div>
     <div class="sb-item sb-right" id="sb-lang">C Language</div>
   </div>
   <div id="toast"></div>`;
@@ -174,6 +175,15 @@ export function mountApp(root: HTMLElement): void {
     s.setLanguage(next);
     editor.setLanguage(next);
     sbLang.textContent = next === 'c' ? 'C Language' : 'Python Language';
+  });
+
+  // Theme toggle (T060a)
+  const savedTheme = localStorage.getItem('compileviz-theme');
+  if (savedTheme === 'light') root.dataset.theme = 'light';
+  (root.querySelector('#sb-theme') as HTMLElement).addEventListener('click', () => {
+    const next = root.dataset.theme === 'light' ? 'dark' : 'light';
+    root.dataset.theme = next;
+    localStorage.setItem('compileviz-theme', next);
   });
 
   window.setTimeout(() => toast('info', 'CompileViz ready — press ▶ Run or Ctrl+Enter'), 300);
