@@ -447,11 +447,13 @@ int check_types(char *type1, char *type2){
 
 char *get_type(char *var){
 	for(int i=0; i<count; i++) {
-		// Handle case of use before declaration
 		if(!strcmp(symbol_table[i].id_name, var)) {
 			return symbol_table[i].data_type;
 		}
 	}
+	/* T019: undeclared id → safe default (the error is already reported by
+	   check_declaration); returning garbage here used to segfault strcmp(). */
+	return "int";
 }
 
 void add(char c) {
@@ -523,9 +525,8 @@ void print_tree(struct node* tree) {
 		printf("\n\nNo parse tree — a syntax error occurred in the input.\n\n");
 		return;
 	}
-	// print_tree_util(tree, 0);
-	printf("\n\nInorder traversal of the Parse Tree is: \n\n");
-	print_inorder(tree);
+	printf("\n\nParse Tree (derivation): \n\n");
+	print_tree_util(tree, 0);
 }
 
 void print_inorder(struct node *tree) {
@@ -542,15 +543,17 @@ void print_inorder(struct node *tree) {
 	}
 }
 
-void print_tree_util(struct node *root, int space) {
+/* T018a (FR-037): left-first pre-order, 2-space indent per level — the
+   canonical layout the backend tree_builder parses (never a flat list). */
+void print_tree_util(struct node *root, int level) {
+    int i;
     if(root == NULL)
         return;
-    space += 7;
-    print_tree_util(root->right, space);
-    for (int i = 7; i < space; i++)
-        printf(" ");
+    for (i = 0; i < level; i++)
+        printf("  ");
 	printf("%s\n", root->token);
-    print_tree_util(root->left, space);
+    print_tree_util(root->left, level + 1);
+    print_tree_util(root->right, level + 1);
 }
 
 void insert_type() {
