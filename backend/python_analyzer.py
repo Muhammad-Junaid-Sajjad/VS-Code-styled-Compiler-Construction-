@@ -136,7 +136,26 @@ def _build_symbols(module: ast.Module) -> list:
                     symbols.append({'name': target.id, 'type': _type_of(node.value),
                                     'scope': 'global', 'value': _const_value(node.value),
                                     'line': target.lineno})
+        elif isinstance(node, ast.AnnAssign):
+            # Type-hinted assignment `x: int = 5` — record the annotation type.
+            if isinstance(node.target, ast.Name):
+                symbols.append({'name': node.target.id, 'type': _annot_type(node.annotation),
+                                'scope': 'global',
+                                'value': _const_value(node.value) if node.value else None,
+                                'line': node.lineno})
     return symbols
+
+
+def _annot_type(annot: ast.AST) -> str:
+    if isinstance(annot, ast.Name):
+        return annot.id
+    if isinstance(annot, ast.Subscript):
+        return f"{_annot_type(annot.value)}[{_annot_type(annot.slice)}]"
+    if isinstance(annot, ast.Constant):
+        return repr(annot.value)
+    if isinstance(annot, ast.Tuple):
+        return ", ".join(_annot_type(e) for e in annot.elts)
+    return "unknown"
 
 
 def _type_of(node: ast.AST) -> str:
@@ -246,6 +265,8 @@ def _static_issues(module: ast.Module, errors: list, warnings: list):
             for t in node.targets:
                 if isinstance(t, ast.Name):
                     defined.add(t.id)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            defined.add(node.target.id)
     for node in ast.walk(module):
         if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
             if node.id not in defined and node.id not in PY_BUILTINS:
