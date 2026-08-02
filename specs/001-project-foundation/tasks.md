@@ -121,10 +121,10 @@ Every task follows: `- [ ] <TASK_ID> [P?] [USx?] Description with file path`
 
 **Independent Test**: cross-check real `compiler` output vs backend-parsed output for identity on all C samples.
 
-- [ ] T030 [US3] Add cross-validation tests asserting parsed `tokens`/`parse_tree`/`symbol_table`/`ir_code` equal C raw section output at `backend/tests/test_output_fidelity.py`
-- [ ] T030a [US3] Add a **real-tree fidelity test**: `parse_tree` is the parser's derivation tree (matches the re-enabled `print_tree_util` output), never the synthetic grouping (FR-037)
-- [ ] T031 [US3] Add identical-schema regression test proving C and Python emit the same JSON shape at `backend/tests/test_schema_parity.py`
-- [ ] T032 [US3] Document in `compiler/README.md` the **resolved** precedence/associativity table (FR-002) and any remaining shift/reduce conflicts **with their resolution rationale** — do NOT record them as "accepted, do not affect correctness" (that premise is disproven; a value-changing conflict is a miscompile)
+- [x] T030 [US3] Add cross-validation tests asserting parsed `tokens`/`parse_tree`/`symbol_table`/`ir_code` equal C raw section output at `backend/tests/test_output_fidelity.py`
+- [x] T030a [US3] Add a **real-tree fidelity test**: `parse_tree` is the parser's derivation tree (matches the re-enabled `print_tree_util` output), never the synthetic grouping (FR-037)
+- [x] T031 [US3] Add identical-schema regression test proving C and Python emit the same JSON shape at `backend/tests/test_schema_parity.py`
+- [x] T032 [US3] Document in `compiler/README.md` the **resolved** precedence/associativity table (FR-002) and any remaining shift/reduce conflicts **with their resolution rationale** — do NOT record them as "accepted, do not affect correctness" (that premise is disproven; a value-changing conflict is a miscompile)
 
 ---
 
@@ -154,7 +154,7 @@ Every task follows: `- [ ] <TASK_ID> [P?] [USx?] Description with file path`
 **Independent Test**: each of 9 catalog entries loads correct source and corrects language.
 
 - [x] T039 [P] [US7] Implement `Explorer` listing the `catalog.ts` entries by language in `frontend/src/components/Explorer.ts`
-- [ ] T039a [US7] **Author §5.9-compliant samples (FR-059):** write/rewrite `hello.c`, `arithmetic.c`, `factorial.c` (iterative — no user functions) and Python samples so **every catalog entry compiles through all 4 phases**. Replace the current out-of-subset frontend samples (`printf("%d", sum)`, recursion) in `frontend/src/samples/catalog.ts`
+- [x] T039a [US7] **Author §5.9-compliant samples (FR-059):** write/rewrite `hello.c`, `arithmetic.c`, `factorial.c` (iterative — no user functions) and Python samples so **every catalog entry compiles through all 4 phases**. Replace the current out-of-subset frontend samples (`printf("%d", sum)`, recursion) in `frontend/src/samples/catalog.ts`
 - [x] T040 [US7] On click, set code+`language` (`.c`→`c`, `.py`→`python`) and the active tab name in `frontend/src/components/Explorer.ts` + `frontend/src/state/store.ts`
 - [x] T041 [US7] Add frontend Vitest tests asserting sample→language flip at `frontend/tests/explorer.test.ts`
 
@@ -200,21 +200,21 @@ Every task follows: `- [ ] <TASK_ID> [P?] [USx?] Description with file path`
 Purpose: multi-story quality, E2E, docs, release gates.
 
 - [x] T053 Produce the deterministic frontend `dist/` bundle built by `make run` (FR-045)
-- [ ] T054 Serve built SPA from Flask with unknown-route → index.html fallback (FR-046) in `backend/app.py`
-- [ ] T054a Serve the app under a **production WSGI server** (Waitress in-process or Gunicorn) with `debug=False`, `host=0.0.0.0`; add `make run-prod` — remove the current `app.run(debug=True)` dev default for production
-- [ ] T054b Implement **CORS allowlist** (only the serving origin) + security headers (CSP, X-Content-Type-Options) instead of the current wide-open `CORS(app)` in `backend/app.py` (FR-056)
-- [ ] T055 E2E browser suite (Playwright) for User Story 6 + User Story 9 edge flows in `e2e/` (SC-008)
-- [ ] T055a Add an **SC-010 E2E timing test**: for a supported-subset input, all 4 phase outputs render within **2 seconds** of clicking Run — assert in the E2E suite
-- [ ] T056 Verify `make test` runs pytest + vitest + playwright in one command (FR-052)
-- [ ] T056a Add **CI** (GitHub Actions or equivalent) that runs `make test` on push/PR with a `npm ci` + `pip install -r` bootstrap so reproducibility is enforced by automation (FR-047)
-- [ ] T056b Add `make lint`, `make format`, and `make check` targets (ruff/eslint/prettier) wired into the CI gate
-- [ ] T057 Security-hardening audit pass: request-size limit, subprocess caps (timeout + output cap + resource limits), temp hygiene, no shell interpolation, concurrency lock (T015b), CORS allowlist (T054b), strict temp-dir ownership (FR-058)
-- [ ] T058 Observability: confirm structured logs + `/api/status` health contract (plan §8.2)
-- [ ] T059 `make clean && make` from a clean clone rebuilds; SC-009
-- [ ] T060 Final README with multi-language usage, `make run` (dev) + `make run-prod`, build steps, screenshots (FR-054)
-- [ ] T060a Add a **light/dark theme toggle** persisting the preference across the whole IDE shell in `frontend/src/App.ts`
-- [ ] T060b Add **keyboard accessibility** (ARIA roles, focus management, keyboard-accessible panels and autocomplete) in `frontend/src/components/*` and a basic a11y check in the E2E suite
-- [ ] T060c **FR-059 catalog acceptance gate:** a test/script verifying ALL 9 catalog samples compile through all 4 phases within §5.9 for their language — any shipped sample the pipeline cannot fully process is a P1 defect (ties T017 + T027 + T039a together)
+- [x] T054 Serve built SPA from Flask with unknown-route → index.html fallback (FR-046) in `backend/app.py`
+- [x] T054a Serve the app under a **production WSGI server** (Waitress in-process or Gunicorn) with `debug=False`, `host=0.0.0.0`; add `make run-prod` — remove the current `app.run(debug=True)` dev default for production
+- [x] T054b Implement **CORS allowlist** (only the serving origin) + security headers (CSP, X-Content-Type-Options) instead of the current wide-open `CORS(app)` in `backend/app.py` (FR-056)
+- [x] T055 E2E browser suite (Playwright) for User Story 6 + User Story 9 edge flows in `e2e/` (SC-008)
+- [x] T055a Add an **SC-010 E2E timing test**: for a supported-subset input, all 4 phase outputs render within **2 seconds** of clicking Run — assert in the E2E suite
+- [x] T056 Verify `make test` runs pytest + vitest + playwright in one command (FR-052)
+- [x] T056a Add **CI** (GitHub Actions or equivalent) that runs `make test` on push/PR with a `npm ci` + `pip install -r` bootstrap so reproducibility is enforced by automation (FR-047)
+- [x] T056b Add `make lint`, `make format`, and `make check` targets (ruff/eslint/prettier) wired into the CI gate
+- [x] T057 Security-hardening audit pass: request-size limit, subprocess caps (timeout + output cap + resource limits), temp hygiene, no shell interpolation, concurrency lock (T015b), CORS allowlist (T054b), strict temp-dir ownership (FR-058)
+- [x] T058 Observability: confirm structured logs + `/api/status` health contract (plan §8.2)
+- [x] T059 `make clean && make` from a clean clone rebuilds; SC-009
+- [x] T060 Final README with multi-language usage, `make run` (dev) + `make run-prod`, build steps, screenshots (FR-054)
+- [x] T060a Add a **light/dark theme toggle** persisting the preference across the whole IDE shell in `frontend/src/App.ts`
+- [x] T060b Add **keyboard accessibility** (ARIA roles, focus management, keyboard-accessible panels and autocomplete) in `frontend/src/components/*` and a basic a11y check in the E2E suite
+- [x] T060c **FR-059 catalog acceptance gate:** a test/script verifying ALL 9 catalog samples compile through all 4 phases within §5.9 for their language — any shipped sample the pipeline cannot fully process is a P1 defect (ties T017 + T027 + T039a together)
 
 ---
 
