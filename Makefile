@@ -54,6 +54,15 @@ test: compiler setup-backend
 	else \
 		echo "frontend tests: frontend/ not scaffolded yet"; \
 	fi
+	@$(MAKE) e2e
+
+## ── E2E (T055/T056, FR-052) ────────────────────────────────────────────────
+e2e:
+	@cd $(FRONTEND) && if [ -d node_modules/@playwright/test ]; then \
+		npx playwright test --config e2e/playwright.config.ts; \
+	else \
+		echo "E2E skipped: run 'cd frontend && npx playwright install chromium' first"; \
+	fi
 
 ## ── Lint / Format / Check (T056b) ──────────────────────────────────────────
 lint:
