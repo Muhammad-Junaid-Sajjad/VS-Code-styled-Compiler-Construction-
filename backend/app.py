@@ -1,5 +1,14 @@
 import os
 import re
+import json
+import sys
+import time
+import logging
+import threading
+
+# Deep parse trees (many declarations) exceed Python's default JSON recursion
+# limit — raise it so large-but-valid programs serialize (found live-testing).
+sys.setrecursionlimit(10000)
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
@@ -8,16 +17,52 @@ from lexer_parser    import parse_compiler_output
 from tree_builder    import build_tree
 from contract import CompileResponse, Phases, LANGUAGES
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DIST_DIR = os.path.normpath(os.path.join(BASE_DIR, '..', 'frontend', 'dist'))
+
 # ─────────────────────────────────────────────────────────────────────────────
-#  Flask app setup
-#  CORS is widened here only for local dev; tightened to an allowlist in T054b.
+#  Flask app setup — CORS restricted to the serving origin(s) (T054b / FR-056)
 # ─────────────────────────────────────────────────────────────────────────────
 
-app = Flask(__name__)
-CORS(app)
+# Origins that may call the API: the built SPA's origin and the Vite dev server.
+ALLOWED_ORIGINS = [
+    o.strip() for o in os.environ.get('ALLOWED_ORIGINS', 'http://localhost:5000,http://127.0.0.1:5000,http://localhost:5173').split(',')
+    if o.strip()
+]
+
+app = Flask(__name__, static_folder=DIST_DIR if os.path.isdir(DIST_DIR) else None, static_url_path='')
+CORS(app, resources={r"/api/*": {"origins": ALLOWED_ORIGINS}})
+
+# Security headers (T054b / FR-056)
+@app.after_request
+def _security_headers(resp):
+    resp.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    resp.headers.setdefault('X-Frame-Options', 'DENY')
+    resp.headers.setdefault('Referrer-Policy', 'no-referrer')
+    resp.headers.setdefault('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
+    return resp
+
+# Serve the built SPA + unknown-route → index.html fallback (T054 / FR-046)
+if os.path.isdir(DIST_DIR):
+    @app.route('/')
+    def _index():
+        return app.send_static_file('index.html')
+
+    @app.errorhandler(404)
+    def _spa_fallback(_e):
+        if request.path.startswith('/api/'):
+            return jsonify({'success': False, 'error': 'Not found.'}), 404
+        return app.send_static_file('index.html')
 
 # 1 MB request-body cap → Flask returns HTTP 413 automatically (T013 / FR-058)
 app.config['MAX_CONTENT_LENGTH'] = 1_000_000
+
+# Structured logging (T014 / plan §8.2) — never log source code (student code is private).
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+logger = logging.getLogger('compileviz')
+
+# Concurrency guard (T015b / FR-058): one subprocess compile at a time; 429 when busy.
+_compile_lock = threading.Lock()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -71,53 +116,75 @@ def compile_code():
         return jsonify(_empty_response(language)), 200
 
     # ── 2. Run compiler binary (C pipeline; Python routes in P2) ─────────────
-    run_result = run_compiler(source_code)
+    start = time.perf_counter()
 
-    # Fatal runner errors: binary missing → 502; timeout → 504 (FR-022/FR-023)
-    if run_result['error_msg']:
-        status_code = 504 if 'timed out' in run_result['error_msg'].lower() else 502
-        body = CompileResponse(
-            success=False,
-            language=language,
-            errors=[{'level': 'error', 'message': run_result['error_msg'], 'line': 0, 'col': 0}],
-            phases=Phases('error', 'error', 'error', 'error'),
-        ).to_dict()
-        return jsonify(body), status_code
+    if not _compile_lock.acquire(blocking=False):
+        # FR-058 / T015b: a compile is already in flight — refuse politely.
+        return jsonify({'success': False,
+                        'error': 'Another compilation is in progress. Try again shortly.'}), 429
 
-    # ── 3. Parse compiler output → structured data ───────────────────────────
-    parsed = parse_compiler_output(
-        stdout  = run_result['stdout'],
-        stderr  = run_result['stderr'],
-        success = run_result['success'],
-    )
+    try:
+        # Python pipeline is in-process (stdlib tokenize + ast) — same schema (FR-012/T029)
+        if language == 'python':
+            from python_analyzer import analyze_python
+            result = analyze_python(source_code)
+            _log_compile(language, result['success'], 200, start,
+                         len(result['tokens']), len(result['errors']), len(result['warnings']))
+            return jsonify(result), 200
 
-    # ── 4. Build parse tree ──────────────────────────────────────────────────
-    parse_tree = build_tree(
-        raw_text = _extract_tree_section(run_result['stdout']),
-        tokens   = parsed['tokens'],
-    )
+        run_result = run_compiler(source_code)
 
-    # ── 5. Build and return response ─────────────────────────────────────────
-    response = CompileResponse(
-        success     = run_result['success'],
-        language    = language,
-        tokens      = parsed['tokens'],
-        parse_tree  = parse_tree,
-        symbol_table= parsed['symbol_table'],
-        ir_code     = parsed['ir_code'],
-        errors      = parsed['errors'],
-        warnings    = parsed['warnings'],
-        phases      = Phases(**{k: parsed['phases'].get(k, 'done') for k in ('lexer', 'parser', 'semantic', 'irgen')}),
-        raw_output  = run_result['stdout'],
-    )
+        # Fatal runner errors: binary missing → 502; timeout → 504 (FR-022/FR-023)
+        if run_result['error_msg']:
+            status_code = 504 if 'timed out' in run_result['error_msg'].lower() else 502
+            body = CompileResponse(
+                success=False,
+                language=language,
+                errors=[{'level': 'error', 'message': run_result['error_msg'], 'line': 0, 'col': 0}],
+                phases=Phases('error', 'error', 'error', 'error'),
+            ).to_dict()
+            _log_compile(language, False, status_code, start, 0, 1, 0)
+            return jsonify(body), status_code
 
-    # If compiler succeeded but produced no token stream, fall back to the
-    # regex tokeniser so the Tokens panel is never empty (GAP-B resolution).
-    if run_result['success'] and not response.tokens:
-        from lexer_parser import _fallback_tokenise
-        response.tokens = _fallback_tokenise(source_code)
+        # ── 3. Parse compiler output → structured data ───────────────────────
+        parsed = parse_compiler_output(
+            stdout  = run_result['stdout'],
+            stderr  = run_result['stderr'],
+            success = run_result['success'],
+        )
 
-    return jsonify(response.to_dict()), 200
+        # ── 4. Build parse tree ──────────────────────────────────────────────
+        parse_tree = build_tree(
+            raw_text = _extract_tree_section(run_result['stdout']),
+            tokens   = parsed['tokens'],
+        )
+
+        # ── 5. Build and return response ─────────────────────────────────────
+        response = CompileResponse(
+            success     = run_result['success'] and not parsed['errors'],
+            language    = language,
+            tokens      = parsed['tokens'],
+            parse_tree  = parse_tree,
+            symbol_table= parsed['symbol_table'],
+            ir_code     = parsed['ir_code'],
+            errors      = parsed['errors'],
+            warnings    = parsed['warnings'],
+            phases      = Phases(**{k: parsed['phases'].get(k, 'done') for k in ('lexer', 'parser', 'semantic', 'irgen')}),
+            raw_output  = run_result['stdout'],
+        )
+
+        # If compiler succeeded but produced no token stream, fall back to the
+        # regex tokeniser so the Tokens panel is never empty (GAP-B resolution).
+        if run_result['success'] and not response.tokens:
+            from lexer_parser import _fallback_tokenise
+            response.tokens = _fallback_tokenise(source_code)
+
+        _log_compile(language, response.success, 200, start,
+                     len(response.tokens), len(response.errors), len(response.warnings))
+        return jsonify(response.to_dict()), 200
+
+    finally:
+        _compile_lock.release()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -140,12 +207,12 @@ def tokenize_only():
 # ─────────────────────────────────────────────────────────────────────────────
 
 _TREE_SECTION_RE = re.compile(
-    r'(parse\s*tree|syntax\s*tree|AST|abstract\s*syntax)', re.I
+    r'PHASE\s*2\s*:\s*SYNTAX|parse\s*tree|syntax\s*tree|AST|abstract\s*syntax', re.I
 )
 
 
 def _extract_tree_section(stdout: str) -> str:
-    """Find the parse-tree section in raw compiler output ('' if not found)."""
+    """Find the PHASE-2 derivation-tree section in raw compiler output ('' if not found)."""
     lines       = stdout.splitlines()
     in_section  = False
     buf         = []
@@ -155,11 +222,27 @@ def _extract_tree_section(stdout: str) -> str:
             in_section = True
             continue
         if in_section:
-            if re.match(r'^={3,}|^-{3,}', line.strip()):
+            # Stop at the next section header (=== / --- / PHASE n:)
+            if re.match(r'^={3,}|^-{3,}|PHASE\s*\d+\s*:', line.strip(), re.I):
                 break
             buf.append(line)
 
     return '\n'.join(buf).strip()
+
+
+def _log_compile(language: str, success: bool, http_status: int,
+                 start: float, token_count: int, error_count: int, warning_count: int) -> None:
+    """T014 / plan §8.2 — structured log per compile. NEVER logs source code."""
+    logger.info(json.dumps({
+        'event': 'compile',
+        'language': language,
+        'success': success,
+        'http_status': http_status,
+        'latency_ms': round((time.perf_counter() - start) * 1000, 1),
+        'token_count': token_count,
+        'error_count': error_count,
+        'warning_count': warning_count,
+    }))
 
 
 def _empty_response(language: str) -> dict:

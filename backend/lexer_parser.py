@@ -6,21 +6,19 @@ import re
 #  Converts the raw stdout text from the C compiler binary into structured
 #  Python dicts that Flask can return as JSON.
 #
-#  The AnjaneyaTripathi/c-compiler prints sections separated by headers like:
-#      === TOKENS ===
-#      === SYMBOL TABLE ===
-#      === INTERMEDIATE CODE ===
-#      === ERRORS ===
-#
-#  If your binary uses different headers, update SECTION_HEADERS below.
+#  The C binary emits four sections with real headers (T016):
+#      PHASE 1: LEXICAL ANALYSIS            → symbol table rows
+#      PHASE 2: SYNTAX ANALYSIS             → derivation tree
+#      PHASE 3: SEMANTIC ANALYSIS           → error bullets
+#      PHASE 4: INTERMEDIATE CODE GENERATION → IR lines
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ── Section header patterns (case-insensitive) ────────────────────────────────
+# ── Section header patterns (real `PHASE n:` headers, case-insensitive) ──────
 SECTION_HEADERS = {
-    'tokens'  : re.compile(r'(token|lexeme|lex\s*output)', re.I),
-    'symtable': re.compile(r'(symbol\s*table|sym\s*table)',  re.I),
-    'ircode'  : re.compile(r'(intermediate|three.address|IR\s*code|TAC|quad)', re.I),
-    'errors'  : re.compile(r'(error|warning|diagnostic)',   re.I),
+    'symtable': re.compile(r'PHASE\s*1\s*:\s*LEXICAL', re.I),
+    'tree'    : re.compile(r'PHASE\s*2\s*:\s*SYNTAX', re.I),
+    'errors'  : re.compile(r'PHASE\s*3\s*:\s*SEMANTIC', re.I),
+    'ircode'  : re.compile(r'PHASE\s*4\s*:\s*INTERMEDIATE', re.I),
 }
 
 # ── Known C keywords for fallback tokeniser ───────────────────────────────────
@@ -69,7 +67,7 @@ def parse_compiler_output(stdout: str, stderr: str, success: bool) -> dict:
     }
 
     return {
-        'tokens'      : tokens,
+        'tokens'      : _normalize_tokens(tokens),
         'symbol_table': symbol_table,
         'ir_code'     : ir_code,
         'errors'      : errors,
@@ -77,6 +75,19 @@ def parse_compiler_output(stdout: str, stderr: str, success: bool) -> dict:
         'phases'      : phases,
         'raw_output'  : stdout,
     }
+
+
+def _normalize_tokens(tokens: list) -> list:
+    """Map token dicts to the contract shape {token, class, line, col} (T009/FR-015)."""
+    out = []
+    for t in tokens:
+        out.append({
+            'token': t.get('value', t.get('token', '')),
+            'class': t.get('type', t.get('class', 'IDENTIFIER')),
+            'line' : t.get('line', 1),
+            'col'  : t.get('col', 0),
+        })
+    return out
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -242,42 +253,32 @@ def _fallback_tokenise(source: str) -> list:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _parse_symtable(section: str) -> list:
+    """PHASE-1 rows are `NAME  DATATYPE  TYPE  LINE` (T018, FR-038).
+    Maps to the 5-field Symbol: scope='global', value = const literal or None."""
     symbols = []
     for line in section.splitlines():
         stripped = line.strip()
-        if not stripped or re.match(r'^[-=|+]+$', stripped):
+        if not stripped:
             continue
-        # Skip header rows
-        if re.search(r'(name|type|scope|symbol)', stripped, re.I) and '|' not in stripped:
-            continue
-
-        # Pipe-delimited table  →  name | type | scope | value | line
-        parts = [p.strip() for p in re.split(r'\|', stripped) if p.strip()]
-        if len(parts) >= 2:
-            sym = {
-                'name' : parts[0] if len(parts) > 0 else '',
-                'type' : parts[1] if len(parts) > 1 else 'unknown',
-                'scope': parts[2] if len(parts) > 2 else 'global',
-                'value': parts[3] if len(parts) > 3 else '—',
-                'line' : _safe_int(parts[4]) if len(parts) > 4 else 0,
-                'used' : True,
-            }
-            symbols.append(sym)
-            continue
-
-        # Space/tab delimited
+        if re.match(r'^[-=|_+]+$', stripped) or re.match(r'^SYMBOL\b', stripped, re.I):
+            continue   # separator line + column header
         cols = stripped.split()
-        if len(cols) >= 2:
-            sym = {
-                'name' : cols[0],
-                'type' : cols[1] if len(cols) > 1 else 'unknown',
-                'scope': cols[2] if len(cols) > 2 else 'global',
-                'value': cols[3] if len(cols) > 3 else '—',
-                'line' : _safe_int(cols[4]) if len(cols) > 4 else 0,
-                'used' : True,
-            }
-            symbols.append(sym)
-
+        if len(cols) < 3:
+            continue
+        # Formats: `name type kind line`  OR  `name kind line` (headers: no datatype)
+        if len(cols) >= 4 and cols[3].isdigit():
+            name, dtype, kind, line = cols[0], cols[1], cols[2], cols[3]
+        else:
+            name, kind, line = cols[0], cols[1], cols[2]
+            dtype = ''
+        symbols.append({
+            'name' : name,
+            'type' : dtype,
+            'scope': 'global',
+            'value': name if kind.lower() == 'constant' else None,
+            'line' : _safe_int(line),
+            'used' : True,
+        })
     return symbols
 
 
@@ -298,9 +299,8 @@ def _parse_ircode(section: str) -> list:
 #  ERROR / WARNING PARSER
 # ─────────────────────────────────────────────────────────────────────────────
 
-_ERROR_PATTERN = re.compile(
-    r'(?:line\s*(\d+))?.*?(error|warning|note)\s*:?\s*(.+)', re.I
-)
+# PHASE-3 semantic errors print as `\t - Line N: message` bullets (T016m).
+_BULLET_RE = re.compile(r'^\s*[-*]\s*Line\s*(\d+):\s*(.+)$', re.I)
 
 def _parse_errors(section: str, stderr: str, success: bool) -> tuple:
     errors   = []
@@ -311,16 +311,14 @@ def _parse_errors(section: str, stderr: str, success: bool) -> tuple:
         stripped = line.strip()
         if not stripped:
             continue
-        m = _ERROR_PATTERN.search(stripped)
+        m = _BULLET_RE.match(stripped)
         if m:
-            line_no = _safe_int(m.group(1)) if m.group(1) else 0
-            level   = m.group(2).lower()
-            message = m.group(3).strip()
-            entry   = {'level': level, 'message': message, 'line': line_no, 'col': 0}
-            if level == 'warning':
-                warnings.append(entry)
-            elif level == 'error':
-                errors.append(entry)
+            errors.append({'level': 'error', 'message': m.group(2).strip(),
+                           'line': _safe_int(m.group(1)), 'col': 0})
+            continue
+        # Lexer/parser errors land on stderr (e.g. `syntax error`).
+        if re.search(r'\bsyntax error\b', stripped, re.I):
+            errors.append({'level': 'error', 'message': stripped, 'line': 0, 'col': 0})
 
     # If compilation failed but we found no structured errors, add a generic one
     if not success and not errors:

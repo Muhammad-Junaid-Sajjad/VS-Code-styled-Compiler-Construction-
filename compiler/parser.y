@@ -25,7 +25,7 @@
         char * data_type;
         char * type;
         int line_no;
-	} symbol_table[40];
+	} symbol_table[500];
 
     int count=0;
     int q;
@@ -34,13 +34,31 @@
 	struct node *head;
 	int sem_errors=0;
 	int ic_idx=0;
+	int icg_full=0;
 	int temp_var=0;
 	int label=0;
 	int is_for=0;
+	int loop_top=0;    /* T016e: do-while loop-back label */
 	char buff[100];
-	char errors[10][100];
+	/* T016h: per-for increment buffer stack — body iterators must never clobber
+	   a for-loop's deferred increment IR (nested-loop stale-buff bug). */
+	char incr_buf[10][500];
+	int  incr_depth = 0;
+	int  for_incr_active = 0;
+	char errors[50][100];
 	char reserved[10][10] = {"int", "float", "char", "void", "if", "else", "for", "main", "return", "include"};
-	char icg[50][100];
+	char icg[1000][100];
+	/* Bounds-guarded IR emission: never writes past icg[]; surfaces a clear
+	   "program too large" diagnostic instead of silently corrupting memory. */
+	#define ICG_LINE(...) do { \
+		if(ic_idx < 1000) { sprintf(icg[ic_idx++], __VA_ARGS__); } \
+		else if(!icg_full) { icg_full = 1; \
+			sprintf(errors[sem_errors++], "Line %d: Error: program too large (IR buffer exhausted)\n", countn+1); } \
+	} while(0)
+	/* Bounds-guarded semantic-error recording: never writes past errors[]. */
+	#define RECORD_ERR(...) do { \
+		if(sem_errors < 50) { sprintf(errors[sem_errors++], __VA_ARGS__); } \
+	} while(0)
 
 	struct node { 
 		struct node *left; 
@@ -68,21 +86,38 @@
 			char else_body[5];
 		} nd_obj3;
 	} 
-%token VOID 
-%token <nd_obj> CHARACTER PRINTFF SCANFF INT FLOAT CHAR FOR IF ELSE TRUE FALSE NUMBER FLOAT_NUM ID LE GE EQ NE GT LT AND OR STR ADD MULTIPLY DIVIDE SUBTRACT UNARY INCLUDE RETURN 
+%token VOID
+%token <nd_obj> CHARACTER PRINTFF SCANFF INT FLOAT CHAR FOR IF ELSE WHILE DO BREAK CONTINUE TRUE FALSE NUMBER FLOAT_NUM ID LE GE EQ NE GT LT AND OR NOT STR ADD MULTIPLY DIVIDE SUBTRACT MODULO UNARY INCLUDE RETURN
 %type <nd_obj> headers main body return datatype statement arithmetic relop program else
 %type <nd_obj2> init value expression
 %type <nd_obj3> condition
 
+/* Operator precedence/associativity (FR-002, T016c) — lowest first:
+   || < && < relational < additive < multiplicative; unary tightest. */
+%left OR
+%left AND
+%left EQ NE
+%left LT GT LE GE
+%left ADD SUBTRACT
+%left MULTIPLY DIVIDE MODULO
+%right NOT
+%right UNARY
+
 %%
 
-program: headers main '(' ')' '{' body return '}' { $2.nd = mknode($6.nd, $7.nd, "main"); $$.nd = mknode($1.nd, $2.nd, "program"); 
+program: headers main '(' ')' '{' body return '}' { $2.nd = mknode($6.nd, $7.nd, "main"); $$.nd = mknode($1.nd, $2.nd, "program");
 	head = $$.nd;
-} 
+}
+| headers main '(' ')' '{' return '}' {   /* T016e: empty body — main(){ return 0; } */
+	$2.nd = mknode(NULL, $6.nd, "main");
+	$$.nd = mknode($1.nd, $2.nd, "program");
+	head = $$.nd;
+}
 ;
 
-headers: headers headers { $$.nd = mknode($1.nd, $2.nd, "headers"); }
+headers: headers INCLUDE { add('H'); } { $$.nd = mknode($1.nd, mknode(NULL, NULL, $2.name), "headers"); }
 | INCLUDE { add('H'); } { $$.nd = mknode(NULL, NULL, $1.name); }
+| { $$.nd = NULL; }   /* T016d: headers optional — header-less programs valid (FR-002/§5.9) */
 ;
 
 main: datatype ID { add('F'); }
@@ -94,18 +129,36 @@ datatype: INT { insert_type(); }
 | VOID { insert_type(); }
 ;
 
-body: FOR { add('K'); is_for = 1; } '(' statement ';' condition ';' statement ')' '{' body '}' { 
-	struct node *temp = mknode($6.nd, $8.nd, "CONDITION"); 
-	struct node *temp2 = mknode($4.nd, temp, "CONDITION"); 
-	$$.nd = mknode(temp2, $11.nd, $1.name); 
-	sprintf(icg[ic_idx++], buff);
-	sprintf(icg[ic_idx++], "JUMP to %s\n", $6.if_body);
-	sprintf(icg[ic_idx++], "\nLABEL %s:\n", $6.else_body);
+body: FOR { add('K'); is_for = 1; } '(' statement ';' condition ';' { for_incr_active = 1; incr_depth++; } statement ')' { for_incr_active = 0; } '{' body '}' {
+	/* positions with 3 mid-rules: $1=FOR, $2=A, $3=(, $4=stmt(init), $5=;,
+	   $6=cond, $7=;, $8=B, $9=stmt(incr), $10=), $11=C, $12={, $13=body, $14=} */
+	struct node *temp = mknode($6.nd, $9.nd, "CONDITION");
+	struct node *temp2 = mknode($4.nd, temp, "CONDITION");
+	$$.nd = mknode(temp2, $13.nd, $1.name);
+	ICG_LINE( "%s", incr_buf[incr_depth-1]);   /* deferred increment */
+	incr_depth--;
+	ICG_LINE( "JUMP to %s\n", $6.if_body);
+	ICG_LINE( "\nLABEL %s:\n", $6.else_body);
 }
-| IF { add('K'); is_for = 0; } '(' condition ')' { sprintf(icg[ic_idx++], "\nLABEL %s:\n", $4.if_body); } '{' body '}' { sprintf(icg[ic_idx++], "\nLABEL %s:\n", $4.else_body); } else { 
+| WHILE { add('K'); is_for = 1; } '(' condition ')' '{' body '}' {
+	struct node *cnd = $4.nd;
+	$$.nd = mknode(cnd, $7.nd, "while");
+	/* condition (for-mode) emits: LABEL {if_body}: if NOT (cond) GOTO {else_body} */
+	ICG_LINE( "\nGOTO %s\n", $4.if_body);     /* back to loop check */
+	ICG_LINE( "\nLABEL %s:\n", $4.else_body); /* loop exit */
+}
+| DO { add('K'); is_for = 0; loop_top = label++; ICG_LINE( "\nLABEL L%d:\n", loop_top); } '{' body '}' WHILE '(' value relop value ')' ';' {
+	/* mid-rule action occupies $2: $3={ $4=body $5=} $6=WHILE $7=( $8=value $9=relop $10=value $11=) $12=; */
+	struct node *cnd = mknode($8.nd, $10.nd, $9.name);
+	$$.nd = mknode($4.nd, cnd, "do-while");
+	ICG_LINE( "\nif NOT (%s %s %s) GOTO L%d\n", $8.name, $9.name, $10.name, label);
+	ICG_LINE( "\nGOTO L%d\n", loop_top);
+	ICG_LINE( "\nLABEL L%d:\n", label++);
+}
+| IF { add('K'); is_for = 0; } '(' condition ')' { ICG_LINE( "\nLABEL %s:\n", $4.if_body); } '{' body '}' { ICG_LINE( "\nLABEL %s:\n", $4.else_body); } else {
 	struct node *iff = mknode($4.nd, $8.nd, $1.name); 
 	$$.nd = mknode(iff, $11.nd, "if-else"); 
-	sprintf(icg[ic_idx++], "GOTO next\n");
+	ICG_LINE( "GOTO next\n");
 }
 | statement ';' { $$.nd = $1.nd; }
 | body body { $$.nd = mknode($1.nd, $2.nd, "statements"); }
@@ -121,11 +174,11 @@ condition: value relop value {
 	$$.nd = mknode($1.nd, $3.nd, $2.name); 
 	if(is_for) {
 		sprintf($$.if_body, "L%d", label++);
-		sprintf(icg[ic_idx++], "\nLABEL %s:\n", $$.if_body);
-		sprintf(icg[ic_idx++], "\nif NOT (%s %s %s) GOTO L%d\n", $1.name, $2.name, $3.name, label);
+		ICG_LINE( "\nLABEL %s:\n", $$.if_body);
+		ICG_LINE( "\nif NOT (%s %s %s) GOTO L%d\n", $1.name, $2.name, $3.name, label);
 		sprintf($$.else_body, "L%d", label++);
 	} else {
-		sprintf(icg[ic_idx++], "\nif (%s %s %s) GOTO L%d else GOTO L%d\n", $1.name, $2.name, $3.name, label, label+1);
+		ICG_LINE( "\nif (%s %s %s) GOTO L%d else GOTO L%d\n", $1.name, $2.name, $3.name, label, label+1);
 		sprintf($$.if_body, "L%d", label++);
 		sprintf($$.else_body, "L%d", label++);
 	}
@@ -164,10 +217,13 @@ statement: datatype ID { add('V'); } init {
 			$$.nd = mknode($2.nd, temp, "declaration"); 
 		}
 	} 
-	else { 
-		$$.nd = mknode($2.nd, $4.nd, "declaration"); 
-	} 
-	sprintf(icg[ic_idx++], "%s = %s\n", $2.name, $4.name);
+	else {
+		$$.nd = mknode($2.nd, $4.nd, "declaration");
+	}
+	/* T016i: no IR for uninitialized declarations (was `x = NULL`) */
+	if(strcmp($4.type, "null") != 0) {
+		ICG_LINE( "%s = %s\n", $2.name, $4.name);
+	}
 }
 | ID { check_declaration($1.name); } '=' expression {
 	$1.nd = mknode(NULL, NULL, $1.name); 
@@ -207,33 +263,43 @@ statement: datatype ID { add('V'); } init {
 		}
 	}
 	else {
-		$$.nd = mknode($1.nd, $4.nd, "="); 
+		$$.nd = mknode($1.nd, $4.nd, "=");
 	}
-	sprintf(icg[ic_idx++], "%s = %s\n", $1.name, $4.name);
+	/* T016h: defer assignment IR when inside a for-header increment */
+	if(for_incr_active) {
+		sprintf(incr_buf[incr_depth-1] + strlen(incr_buf[incr_depth-1]), "%s = %s\n", $1.name, $4.name);
+	} else {
+		ICG_LINE( "%s = %s\n", $1.name, $4.name);
+	}
 }
 | ID { check_declaration($1.name); } relop expression { $1.nd = mknode(NULL, NULL, $1.name); $$.nd = mknode($1.nd, $4.nd, $3.name); }
-| ID { check_declaration($1.name); } UNARY { 
-	$1.nd = mknode(NULL, NULL, $1.name); 
-	$3.nd = mknode(NULL, NULL, $3.name); 
-	$$.nd = mknode($1.nd, $3.nd, "ITERATOR");  
-	if(!strcmp($3.name, "++")) {
-		sprintf(buff, "t%d = %s + 1\n%s = t%d\n", temp_var, $1.name, $1.name, temp_var++);
-	}
-	else {
-		sprintf(buff, "t%d = %s + 1\n%s = t%d\n", temp_var, $1.name, $1.name, temp_var++);
+| ID { check_declaration($1.name); } UNARY {
+	$1.nd = mknode(NULL, NULL, $1.name);
+	$3.nd = mknode(NULL, NULL, $3.name);
+	$$.nd = mknode($1.nd, $3.nd, "ITERATOR");
+	{ int _t = temp_var++;
+	  if(for_incr_active) {
+		sprintf(incr_buf[incr_depth-1], "t%d = %s %s 1\n%s = t%d\n", _t,
+			$1.name, !strcmp($3.name, "++") ? "+" : "-", $1.name, _t);
+	  } else {
+		ICG_LINE( "t%d = %s %s 1\n%s = t%d\n", _t,
+			$1.name, !strcmp($3.name, "++") ? "+" : "-", $1.name, _t);
+	  }
 	}
 }
-| UNARY ID { 
-	check_declaration($2.name); 
-	$1.nd = mknode(NULL, NULL, $1.name); 
-	$2.nd = mknode(NULL, NULL, $2.name); 
-	$$.nd = mknode($1.nd, $2.nd, "ITERATOR"); 
-	if(!strcmp($1.name, "++")) {
-		sprintf(buff, "t%d = %s + 1\n%s = t%d\n", temp_var, $2.name, $2.name, temp_var++);
-	}
-	else {
-		sprintf(buff, "t%d = %s - 1\n%s = t%d\n", temp_var, $2.name, $2.name, temp_var++);
-
+| UNARY ID {
+	check_declaration($2.name);
+	$1.nd = mknode(NULL, NULL, $1.name);
+	$2.nd = mknode(NULL, NULL, $2.name);
+	$$.nd = mknode($1.nd, $2.nd, "ITERATOR");
+	{ int _t = temp_var++;
+	  if(for_incr_active) {
+		sprintf(incr_buf[incr_depth-1], "t%d = %s %s 1\n%s = t%d\n", _t,
+			$2.name, !strcmp($1.name, "++") ? "+" : "-", $2.name, _t);
+	  } else {
+		ICG_LINE( "t%d = %s %s 1\n%s = t%d\n", _t,
+			$2.name, !strcmp($1.name, "++") ? "+" : "-", $2.name, _t);
+	  }
 	}
 }
 ;
@@ -242,7 +308,7 @@ init: '=' value { $$.nd = $2.nd; sprintf($$.type, $2.type); strcpy($$.name, $2.n
 | { sprintf($$.type, "null"); $$.nd = mknode(NULL, NULL, "NULL"); strcpy($$.name, "NULL"); }
 ;
 
-expression: expression arithmetic expression { 
+expression: expression arithmetic expression %prec ADD {
 	if(!strcmp($1.type, $3.type)) {
 		sprintf($$.type, $1.type);
 		$$.nd = mknode($1.nd, $3.nd, $2.name); 
@@ -281,15 +347,29 @@ expression: expression arithmetic expression {
 	}
 	sprintf($$.name, "t%d", temp_var);
 	temp_var++;
-	sprintf(icg[ic_idx++], "%s = %s %s %s\n",  $$.name, $1.name, $2.name, $3.name);
+	/* T016h: defer temp-computation IR inside a for-header increment */
+	if(for_incr_active) {
+		sprintf(incr_buf[incr_depth-1] + strlen(incr_buf[incr_depth-1]), "%s = %s %s %s\n", $$.name, $1.name, $2.name, $3.name);
+	} else {
+		ICG_LINE( "%s = %s %s %s\n", $$.name, $1.name, $2.name, $3.name);
+	}
 }
 | value { strcpy($$.name, $1.name); sprintf($$.type, $1.type); $$.nd = $1.nd; }
+| SUBTRACT expression %prec UNARY {
+	/* unary minus (T016e fix): `-5` is 0 - 5 in three-address form */
+	sprintf($$.type, $2.type);
+	sprintf($$.name, "t%d", temp_var);
+	ICG_LINE( "%s = 0 - %s\n", $$.name, $2.name);
+	temp_var++;
+	$$.nd = mknode(NULL, $2.nd, "-");
+}
 ;
 
-arithmetic: ADD 
-| SUBTRACT 
+arithmetic: ADD
+| SUBTRACT
 | MULTIPLY
 | DIVIDE
+| MODULO
 ;
 
 relop: LT
@@ -361,7 +441,7 @@ int search(char *type) {
 void check_declaration(char *c) {
     q = search(c);
     if(!q) {
-        sprintf(errors[sem_errors], "Line %d: Variable \"%s\" not declared before usage!\n", countn+1, c);
+        RECORD_ERR( "Line %d: Variable \"%s\" not declared before usage!\n", countn+1, c);
 		sem_errors++;
     }
 }
@@ -373,7 +453,7 @@ void check_return_type(char *value) {
 		return ;
 	}
 	else {
-		sprintf(errors[sem_errors], "Line %d: Return type mismatch\n", countn+1);
+		RECORD_ERR( "Line %d: Return type mismatch\n", countn+1);
 		sem_errors++;
 	}
 }
@@ -402,18 +482,25 @@ int check_types(char *type1, char *type2){
 
 char *get_type(char *var){
 	for(int i=0; i<count; i++) {
-		// Handle case of use before declaration
 		if(!strcmp(symbol_table[i].id_name, var)) {
 			return symbol_table[i].data_type;
 		}
 	}
+	/* T019: undeclared id → safe default (the error is already reported by
+	   check_declaration); returning garbage here used to segfault strcmp(). */
+	return "int";
 }
 
 void add(char c) {
+	if(count >= 500) {
+		RECORD_ERR( "Line %d: Error: symbol table full (max 500 symbols)\n", countn+1);
+		sem_errors++;
+		return;
+	}
 	if(c == 'V'){
 		for(int i=0; i<10; i++){
 			if(!strcmp(reserved[i], strdup(yytext))){
-        		sprintf(errors[sem_errors], "Line %d: Variable name \"%s\" is a reserved keyword!\n", countn+1, yytext);
+        		RECORD_ERR( "Line %d: Variable name \"%s\" is a reserved keyword!\n", countn+1, yytext);
 				sem_errors++;
 				return;
 			}
@@ -458,7 +545,7 @@ void add(char c) {
 		}
     }
     else if(c == 'V' && q) {
-        sprintf(errors[sem_errors], "Line %d: Multiple declarations of \"%s\" not allowed!\n", countn+1, yytext);
+        RECORD_ERR( "Line %d: Multiple declarations of \"%s\" not allowed!\n", countn+1, yytext);
 		sem_errors++;
     }
 }
@@ -478,9 +565,8 @@ void print_tree(struct node* tree) {
 		printf("\n\nNo parse tree — a syntax error occurred in the input.\n\n");
 		return;
 	}
-	// print_tree_util(tree, 0);
-	printf("\n\nInorder traversal of the Parse Tree is: \n\n");
-	print_inorder(tree);
+	printf("\n\nParse Tree (derivation): \n\n");
+	print_tree_util(tree, 0);
 }
 
 void print_inorder(struct node *tree) {
@@ -497,15 +583,17 @@ void print_inorder(struct node *tree) {
 	}
 }
 
-void print_tree_util(struct node *root, int space) {
+/* T018a (FR-037): left-first pre-order, 2-space indent per level — the
+   canonical layout the backend tree_builder parses (never a flat list). */
+void print_tree_util(struct node *root, int level) {
+    int i;
     if(root == NULL)
         return;
-    space += 7;
-    print_tree_util(root->right, space);
-    for (int i = 7; i < space; i++)
-        printf(" ");
+    for (i = 0; i < level; i++)
+        printf("  ");
 	printf("%s\n", root->token);
-    print_tree_util(root->left, space);
+    print_tree_util(root->left, level + 1);
+    print_tree_util(root->right, level + 1);
 }
 
 void insert_type() {

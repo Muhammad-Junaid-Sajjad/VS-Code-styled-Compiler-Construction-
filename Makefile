@@ -43,8 +43,8 @@ compiler:
 run: setup-backend
 	$(VENV_PY) $(BACKEND)/app.py
 
-run-prod:
-	@echo "TODO (T054a): production WSGI server (Waitress/Gunicorn), debug=False"
+run-prod: setup-backend
+	$(VENV_PY) $(BACKEND)/wsgi.py
 
 ## ── Test (FR-052) ──────────────────────────────────────────────────────────
 test: compiler setup-backend
@@ -54,13 +54,25 @@ test: compiler setup-backend
 	else \
 		echo "frontend tests: frontend/ not scaffolded yet"; \
 	fi
+	@$(MAKE) e2e
 
-## ── Lint / Format / Check ──────────────────────────────────────────────────
+## ── E2E (T055/T056, FR-052) ────────────────────────────────────────────────
+e2e:
+	@cd $(FRONTEND) && if [ -d node_modules/@playwright/test ]; then \
+		npx playwright test --config e2e/playwright.config.ts; \
+	else \
+		echo "E2E skipped: run 'cd frontend && npx playwright install chromium' first"; \
+	fi
+
+## ── Lint / Format / Check (T056b) ──────────────────────────────────────────
 lint:
-	@echo "TODO (T056b): ruff / eslint"
+	@if command -v ruff >/dev/null 2>&1; then ruff check $(BACKEND); else echo "ruff not installed — pip install ruff"; fi
+	@if [ -f $(FRONTEND)/package.json ]; then cd $(FRONTEND) && npx tsc --noEmit; fi
+
 format:
-	@echo "TODO (T056b): ruff format / prettier"
-check: lint format test
+	@if command -v ruff >/dev/null 2>&1; then ruff format $(BACKEND); else echo "ruff not installed — pip install ruff"; fi
+
+check: lint test
 
 ## ── Clean (FR-053) ─────────────────────────────────────────────────────────
 clean:
