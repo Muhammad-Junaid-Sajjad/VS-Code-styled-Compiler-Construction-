@@ -39,6 +39,11 @@
 	int is_for=0;
 	int loop_top=0;    /* T016e: do-while loop-back label */
 	char buff[100];
+	/* T016h: per-for increment buffer stack — body iterators must never clobber
+	   a for-loop's deferred increment IR (nested-loop stale-buff bug). */
+	char incr_buf[10][200];
+	int  incr_depth = 0;
+	int  for_incr_active = 0;
 	char errors[10][100];
 	char reserved[10][10] = {"int", "float", "char", "void", "if", "else", "for", "main", "return", "include"};
 	char icg[50][100];
@@ -107,11 +112,14 @@ datatype: INT { insert_type(); }
 | VOID { insert_type(); }
 ;
 
-body: FOR { add('K'); is_for = 1; } '(' statement ';' condition ';' statement ')' '{' body '}' { 
-	struct node *temp = mknode($6.nd, $8.nd, "CONDITION"); 
-	struct node *temp2 = mknode($4.nd, temp, "CONDITION"); 
-	$$.nd = mknode(temp2, $11.nd, $1.name); 
-	sprintf(icg[ic_idx++], buff);
+body: FOR { add('K'); is_for = 1; } '(' statement ';' condition ';' { for_incr_active = 1; incr_depth++; } statement ')' { for_incr_active = 0; } '{' body '}' {
+	/* positions with 3 mid-rules: $1=FOR, $2=A, $3=(, $4=stmt(init), $5=;,
+	   $6=cond, $7=;, $8=B, $9=stmt(incr), $10=), $11=C, $12={, $13=body, $14=} */
+	struct node *temp = mknode($6.nd, $9.nd, "CONDITION");
+	struct node *temp2 = mknode($4.nd, temp, "CONDITION");
+	$$.nd = mknode(temp2, $13.nd, $1.name);
+	sprintf(icg[ic_idx++], "%s", incr_buf[incr_depth-1]);   /* deferred increment */
+	incr_depth--;
 	sprintf(icg[ic_idx++], "JUMP to %s\n", $6.if_body);
 	sprintf(icg[ic_idx++], "\nLABEL %s:\n", $6.else_body);
 }
@@ -192,10 +200,13 @@ statement: datatype ID { add('V'); } init {
 			$$.nd = mknode($2.nd, temp, "declaration"); 
 		}
 	} 
-	else { 
-		$$.nd = mknode($2.nd, $4.nd, "declaration"); 
-	} 
-	sprintf(icg[ic_idx++], "%s = %s\n", $2.name, $4.name);
+	else {
+		$$.nd = mknode($2.nd, $4.nd, "declaration");
+	}
+	/* T016i: no IR for uninitialized declarations (was `x = NULL`) */
+	if(strcmp($4.type, "null") != 0) {
+		sprintf(icg[ic_idx++], "%s = %s\n", $2.name, $4.name);
+	}
 }
 | ID { check_declaration($1.name); } '=' expression {
 	$1.nd = mknode(NULL, NULL, $1.name); 
@@ -240,28 +251,33 @@ statement: datatype ID { add('V'); } init {
 	sprintf(icg[ic_idx++], "%s = %s\n", $1.name, $4.name);
 }
 | ID { check_declaration($1.name); } relop expression { $1.nd = mknode(NULL, NULL, $1.name); $$.nd = mknode($1.nd, $4.nd, $3.name); }
-| ID { check_declaration($1.name); } UNARY { 
-	$1.nd = mknode(NULL, NULL, $1.name); 
-	$3.nd = mknode(NULL, NULL, $3.name); 
-	$$.nd = mknode($1.nd, $3.nd, "ITERATOR");  
-	if(!strcmp($3.name, "++")) {
-		sprintf(buff, "t%d = %s + 1\n%s = t%d\n", temp_var, $1.name, $1.name, temp_var++);
-	}
-	else {
-		sprintf(buff, "t%d = %s + 1\n%s = t%d\n", temp_var, $1.name, $1.name, temp_var++);
+| ID { check_declaration($1.name); } UNARY {
+	$1.nd = mknode(NULL, NULL, $1.name);
+	$3.nd = mknode(NULL, NULL, $3.name);
+	$$.nd = mknode($1.nd, $3.nd, "ITERATOR");
+	{ int _t = temp_var++;
+	  if(for_incr_active) {
+		sprintf(incr_buf[incr_depth-1], "t%d = %s %s 1\n%s = t%d\n", _t,
+			$1.name, !strcmp($3.name, "++") ? "+" : "-", $1.name, _t);
+	  } else {
+		sprintf(icg[ic_idx++], "t%d = %s %s 1\n%s = t%d\n", _t,
+			$1.name, !strcmp($3.name, "++") ? "+" : "-", $1.name, _t);
+	  }
 	}
 }
-| UNARY ID { 
-	check_declaration($2.name); 
-	$1.nd = mknode(NULL, NULL, $1.name); 
-	$2.nd = mknode(NULL, NULL, $2.name); 
-	$$.nd = mknode($1.nd, $2.nd, "ITERATOR"); 
-	if(!strcmp($1.name, "++")) {
-		sprintf(buff, "t%d = %s + 1\n%s = t%d\n", temp_var, $2.name, $2.name, temp_var++);
-	}
-	else {
-		sprintf(buff, "t%d = %s - 1\n%s = t%d\n", temp_var, $2.name, $2.name, temp_var++);
-
+| UNARY ID {
+	check_declaration($2.name);
+	$1.nd = mknode(NULL, NULL, $1.name);
+	$2.nd = mknode(NULL, NULL, $2.name);
+	$$.nd = mknode($1.nd, $2.nd, "ITERATOR");
+	{ int _t = temp_var++;
+	  if(for_incr_active) {
+		sprintf(incr_buf[incr_depth-1], "t%d = %s %s 1\n%s = t%d\n", _t,
+			$2.name, !strcmp($1.name, "++") ? "+" : "-", $2.name, _t);
+	  } else {
+		sprintf(icg[ic_idx++], "t%d = %s %s 1\n%s = t%d\n", _t,
+			$2.name, !strcmp($1.name, "++") ? "+" : "-", $2.name, _t);
+	  }
 	}
 }
 ;
