@@ -55,12 +55,15 @@ test: compiler setup-backend
 		echo "frontend tests: frontend/ not scaffolded yet"; \
 	fi
 
-## ── Lint / Format / Check ──────────────────────────────────────────────────
+## ── Lint / Format / Check (T056b) ──────────────────────────────────────────
 lint:
-	@echo "TODO (T056b): ruff / eslint"
+	@if command -v ruff >/dev/null 2>&1; then ruff check $(BACKEND); else echo "ruff not installed — pip install ruff"; fi
+	@if [ -f $(FRONTEND)/package.json ]; then cd $(FRONTEND) && npx tsc --noEmit; fi
+
 format:
-	@echo "TODO (T056b): ruff format / prettier"
-check: lint format test
+	@if command -v ruff >/dev/null 2>&1; then ruff format $(BACKEND); else echo "ruff not installed — pip install ruff"; fi
+
+check: lint test
 
 ## ── Clean (FR-053) ─────────────────────────────────────────────────────────
 clean:
