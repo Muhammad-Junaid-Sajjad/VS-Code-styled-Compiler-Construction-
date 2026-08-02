@@ -41,7 +41,7 @@
 	char buff[100];
 	/* T016h: per-for increment buffer stack — body iterators must never clobber
 	   a for-loop's deferred increment IR (nested-loop stale-buff bug). */
-	char incr_buf[10][200];
+	char incr_buf[10][500];
 	int  incr_depth = 0;
 	int  for_incr_active = 0;
 	char errors[10][100];
@@ -246,9 +246,14 @@ statement: datatype ID { add('V'); } init {
 		}
 	}
 	else {
-		$$.nd = mknode($1.nd, $4.nd, "="); 
+		$$.nd = mknode($1.nd, $4.nd, "=");
 	}
-	sprintf(icg[ic_idx++], "%s = %s\n", $1.name, $4.name);
+	/* T016h: defer assignment IR when inside a for-header increment */
+	if(for_incr_active) {
+		sprintf(incr_buf[incr_depth-1] + strlen(incr_buf[incr_depth-1]), "%s = %s\n", $1.name, $4.name);
+	} else {
+		sprintf(icg[ic_idx++], "%s = %s\n", $1.name, $4.name);
+	}
 }
 | ID { check_declaration($1.name); } relop expression { $1.nd = mknode(NULL, NULL, $1.name); $$.nd = mknode($1.nd, $4.nd, $3.name); }
 | ID { check_declaration($1.name); } UNARY {
@@ -325,7 +330,12 @@ expression: expression arithmetic expression %prec ADD {
 	}
 	sprintf($$.name, "t%d", temp_var);
 	temp_var++;
-	sprintf(icg[ic_idx++], "%s = %s %s %s\n",  $$.name, $1.name, $2.name, $3.name);
+	/* T016h: defer temp-computation IR inside a for-header increment */
+	if(for_incr_active) {
+		sprintf(incr_buf[incr_depth-1] + strlen(incr_buf[incr_depth-1]), "%s = %s %s %s\n", $$.name, $1.name, $2.name, $3.name);
+	} else {
+		sprintf(icg[ic_idx++], "%s = %s %s %s\n", $$.name, $1.name, $2.name, $3.name);
+	}
 }
 | value { strcpy($$.name, $1.name); sprintf($$.type, $1.type); $$.nd = $1.nd; }
 ;
