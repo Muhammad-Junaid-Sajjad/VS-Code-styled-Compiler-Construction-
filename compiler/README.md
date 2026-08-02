@@ -134,3 +134,17 @@ int main() {
 ### Intermediate Code Generation
 
 ![Symbol Table](/Images/icg.png)
+
+---
+
+## Build & integration notes (2026-08)
+
+- **Build recipe (verified):** `lex lexer.l; yacc -d -v parser.y; gcc -w -o compiler y.tab.c`.
+  Do **not** use `gcc -ll` — it links `libl`'s own `main` and fails on modern toolchains.
+- **Invocation:** the binary reads source from **stdin** (`./compiler < file`), not argv.
+- **Token source (T016a):** the pipeline does not print a lexer token stream. The backend
+  serves **"Reconstructed Tokens"** from a regex tokeniser over the source, golden-locked by
+  the test suite. A future PHASE-0 lexer dump would make the tokens genuinely lexer-sourced.
+- **Grammar:** operator precedence/associativity follows C (FR-002); shift/reduce conflicts
+  are resolved via the `%left`/`%right` table. Supported constructs are exactly the spec
+  §5.9 subset; out-of-subset constructs produce a clear diagnostic (never a miscompile).
