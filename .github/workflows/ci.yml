@@ -21,8 +21,16 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Install system toolchain (lex/yacc/gcc)
+      - name: Install system toolchain (lex / yacc / gcc)
         run: sudo apt-get update && sudo apt-get install -y flex bison gcc
 
-      - name: make test (venv + pip + npm ci + pytest + vitest)
+      - name: make setup (venv + pip deps + npm ci)
+        run: make setup
+
+      - name: Install Playwright Chromium (+ system deps)
+        run: |
+          cd frontend
+          npx playwright install --with-deps chromium
+
+      - name: make test (pytest + vitest + Playwright E2E)
         run: make test

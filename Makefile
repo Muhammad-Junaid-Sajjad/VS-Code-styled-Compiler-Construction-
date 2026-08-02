@@ -47,22 +47,22 @@ run-prod: setup-backend
 	$(VENV_PY) $(BACKEND)/wsgi.py
 
 ## ── Test (FR-052) ──────────────────────────────────────────────────────────
-test: compiler setup-backend
+test: compiler setup-backend setup-frontend
 	@$(VENV_PY) -m pytest $(BACKEND)/tests -q
-	@if [ -f $(FRONTEND)/package.json ]; then \
-		cd $(FRONTEND) && $(NPM) test -- --run; \
-	else \
-		echo "frontend tests: frontend/ not scaffolded yet"; \
-	fi
+	@cd $(FRONTEND) && $(NPM) test -- --run
 	@$(MAKE) e2e
 
 ## ── E2E (T055/T056, FR-052) ────────────────────────────────────────────────
-e2e:
+e2e: frontend-build
 	@cd $(FRONTEND) && if [ -d node_modules/@playwright/test ]; then \
 		npx playwright test --config e2e/playwright.config.ts; \
 	else \
 		echo "E2E skipped: run 'cd frontend && npx playwright install chromium' first"; \
 	fi
+
+## ── Frontend build (produces dist/ served by Flask; FR-045) ────────────────
+frontend-build:
+	@cd $(FRONTEND) && $(NPM) run build
 
 ## ── Lint / Format / Check (T056b) ──────────────────────────────────────────
 lint:
