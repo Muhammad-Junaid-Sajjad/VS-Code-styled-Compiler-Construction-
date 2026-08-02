@@ -42,7 +42,9 @@ export async function compile(code: string, language: Language): Promise<Compile
 
     const data = parsed.data as unknown as CompileResponse;
     return {
-      ok: resp.ok && data.success,
+      // `ok` = HTTP-level success; `data.success` reflects compile errors,
+      // which the UI must render (diagnostics panel), not discard.
+      ok: resp.ok,
       httpStatus: resp.status,
       data,
     };

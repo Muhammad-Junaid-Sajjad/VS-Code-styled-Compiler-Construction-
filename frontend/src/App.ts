@@ -115,7 +115,8 @@ export function mountApp(root: HTMLElement): void {
       s.setPhases({ ...phases });
       s.setResult(result.data);
       renderResult(containers, result.data);
-      (root.querySelector('#sb-status') as HTMLElement).textContent = '✓ Compiled';
+      (root.querySelector('#sb-status') as HTMLElement).textContent =
+        result.data.success ? '✓ Compiled' : '✗ Compiled with errors';
       toast(result.data.success ? 'success' : 'error',
         result.data.success ? '✓ Compilation successful' : '✗ Compilation completed with errors');
     } catch (err) {
@@ -133,17 +134,18 @@ export function mountApp(root: HTMLElement): void {
   editor.setValue(useStore.getState().editorCode);
   editor.setLanguage(useStore.getState().language);
 
-  // Explorer (T039/T040)
+  // Explorer (T039/T040) — re-render with ITSELF so every click stays wired.
   const explorerEl = root.querySelector('#explorer') as HTMLElement;
-  renderExplorer(explorerEl, () => {
+  function handleSelect() {
     const s = useStore.getState();
     (root.querySelector('#tab-label') as HTMLElement).textContent = s.currentFile ?? 'untitled';
     editor.setLanguage(s.language);
     editor.setValue(s.editorCode);
     (root.querySelector('#sb-lang') as HTMLElement).textContent =
       s.language === 'c' ? 'C Language' : 'Python Language';
-    renderExplorer(explorerEl, () => {});
-  });
+    renderExplorer(explorerEl, handleSelect);
+  }
+  renderExplorer(explorerEl, handleSelect);
 
   // Tab switching
   root.querySelectorAll('.btab').forEach((el) => {
