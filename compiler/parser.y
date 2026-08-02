@@ -395,20 +395,64 @@ return: RETURN { add('K'); } value ';' { check_return_type($3.name); $1.nd = mkn
 int main() {
     yyparse();
     printf("\n\n");
-	printf("\t\t\t\t\t\t\t\t PHASE 1: LEXICAL ANALYSIS \n\n");
-	printf("\nSYMBOL   DATATYPE   TYPE   LINE NUMBER \n");
+	printf("\t\t\t\t\t\t\t\t PHASE 0: LEXICAL ANALYSIS (TOKENS) \n\n");
+	printf("CLASS\t\tLEXEME\t\tLINE\n");
 	printf("_______________________________________\n\n");
 	int i=0;
-	for(i=0; i<count; i++) {
-		printf("%s\t%s\t%s\t%d\t\n", symbol_table[i].id_name, symbol_table[i].data_type, symbol_table[i].type, symbol_table[i].line_no);
+	for(i=0; i<token_count; i++) {
+		printf("%s\t\t%s\t\t%d\n", token_list[i].cls, token_list[i].text, token_list[i].line);
+	}
+	printf("\n\n");
+	printf("\t\t\t\t\t\t\t\t PHASE 1: SYMBOL TABLE \n\n");
+	/* Build a categorized symbol table from the token stream: DATATYPE, KEYWORD,
+	   OPERATOR, DELIMITER, VARIABLE, FUNCTION, CONSTANT, IDENTIFIER. */
+	{
+		struct { char name[100]; char dtype[30]; char kind[20]; int line; } disp[600];
+		int dc = 0;
+		for(int t=0; t<token_count && dc<600; t++) {
+			char name[100], kind[20]="", dtype[30]="";
+			strncpy(name, token_list[t].text, 99); name[99]='\0';
+			const char *cls = token_list[t].cls;
+			if(!strcmp(cls,"DATATYPE")) { strcpy(kind,"DATATYPE"); strncpy(dtype,name,29); }
+			else if(!strcmp(cls,"KEYWORD")) { strcpy(kind,"KEYWORD"); }
+			else if(!strcmp(cls,"OPERATOR")) { strcpy(kind,"OPERATOR"); }
+			else if(!strcmp(cls,"DELIMITER")) { strcpy(kind,"DELIMITER"); }
+			else if(!strcmp(cls,"NUMBER") || !strcmp(cls,"STRING")) { strcpy(kind,"CONSTANT"); }
+			else if(!strcmp(cls,"IDENTIFIER")) {
+				strcpy(kind,"IDENTIFIER");
+				for(int s=0; s<count; s++) {
+					if(symbol_table[s].id_name && !strcmp(symbol_table[s].id_name, name)) {
+						if(symbol_table[s].type && strstr(symbol_table[s].type,"Function")) strcpy(kind,"FUNCTION");
+						else if(symbol_table[s].type && strstr(symbol_table[s].type,"Variable")) strcpy(kind,"VARIABLE");
+						if(symbol_table[s].data_type) strncpy(dtype, symbol_table[s].data_type, 29);
+						break;
+					}
+				}
+			}
+			else continue;
+			int dup=0;
+			for(int d=0; d<dc; d++) {
+				if(!strcmp(disp[d].name,name) && !strcmp(disp[d].kind,kind)) { dup=1; break; }
+			}
+			if(dup) continue;
+			strcpy(disp[dc].name, name); strcpy(disp[dc].dtype, dtype);
+			strcpy(disp[dc].kind, kind); disp[dc].line = token_list[t].line;
+			dc++;
+		}
+		printf("\nNAME\tDATATYPE\tTYPE\t\tLINE\n");
+		printf("_______________________________________\n\n");
+		for(int d=0; d<dc; d++) {
+			printf("%s\t%s\t\t%s\t\t%d\t\n", disp[d].name, disp[d].dtype, disp[d].kind, disp[d].line);
+		}
 	}
 	for(i=0;i<count;i++) {
 		free(symbol_table[i].id_name);
+		free(symbol_table[i].data_type);
 		free(symbol_table[i].type);
 	}
 	printf("\n\n");
 	printf("\t\t\t\t\t\t\t\t PHASE 2: SYNTAX ANALYSIS \n\n");
-	print_tree(head); 
+	print_tree(head);
 	printf("\n\n\n\n");
 	printf("\t\t\t\t\t\t\t\t PHASE 3: SEMANTIC ANALYSIS \n\n");
 	if(sem_errors>0) {

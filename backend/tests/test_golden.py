@@ -30,7 +30,7 @@ def test_parse_is_idempotent():
 
 def test_golden_phase_headers_present():
     r = run_compiler(open(INPUT1).read())
-    for header in ("PHASE 1: LEXICAL ANALYSIS", "PHASE 2: SYNTAX ANALYSIS",
+    for header in ("PHASE 0: LEXICAL ANALYSIS", "PHASE 2: SYNTAX ANALYSIS",
                    "PHASE 3: SEMANTIC ANALYSIS", "PHASE 4: INTERMEDIATE CODE GENERATION"):
         assert header in r["stdout"], f"missing {header} in compiler output"
 

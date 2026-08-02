@@ -1,6 +1,21 @@
 %{
     #include "y.tab.h"
+    #include <string.h>
     int countn=0;
+
+    /* Token stream recorder — every lexeme, classified (classic teaching form). */
+    struct Token { char text[100]; char cls[20]; int line; };
+    struct Token token_list[1000];
+    int token_count = 0;
+
+    void rec(char *text, char *cls) {
+        if(token_count < 1000) {
+            strncpy(token_list[token_count].text, text, 99);
+            strncpy(token_list[token_count].cls, cls, 19);
+            token_list[token_count].line = countn + 1;
+            token_count++;
+        }
+    }
 %}
 %option yylineno
 
@@ -10,49 +25,51 @@ unary "++"|"--"
 
 %%
 
-"printf"                    { strcpy(yylval.nd_obj.name,(yytext)); return PRINTFF; }
-"scanf"                     { strcpy(yylval.nd_obj.name,(yytext)); return SCANFF; }
-"int"                       { strcpy(yylval.nd_obj.name,(yytext)); return INT; }
-"float"                     { strcpy(yylval.nd_obj.name,(yytext)); return FLOAT; }
-"char"                      { strcpy(yylval.nd_obj.name,(yytext)); return CHAR; }
-"void"                      { strcpy(yylval.nd_obj.name,(yytext)); return VOID; }
-"return"                    { strcpy(yylval.nd_obj.name,(yytext)); return RETURN; }
-"for"	                    { strcpy(yylval.nd_obj.name,(yytext)); return FOR; }
-"if"	                    { strcpy(yylval.nd_obj.name,(yytext)); return IF; }
-"else"	                    { strcpy(yylval.nd_obj.name,(yytext)); return ELSE; }
-"while"	                    { strcpy(yylval.nd_obj.name,(yytext)); return WHILE; }
-"do"	                    { strcpy(yylval.nd_obj.name,(yytext)); return DO; }
-"break"	                    { strcpy(yylval.nd_obj.name,(yytext)); return BREAK; }
-"continue"	                { strcpy(yylval.nd_obj.name,(yytext)); return CONTINUE; }
+"printf"                    { rec(yytext,"KEYWORD"); strcpy(yylval.nd_obj.name,(yytext)); return PRINTFF; }
+"scanf"                     { rec(yytext,"KEYWORD"); strcpy(yylval.nd_obj.name,(yytext)); return SCANFF; }
+"int"                       { rec(yytext,"DATATYPE"); strcpy(yylval.nd_obj.name,(yytext)); return INT; }
+"float"                     { rec(yytext,"DATATYPE"); strcpy(yylval.nd_obj.name,(yytext)); return FLOAT; }
+"char"                      { rec(yytext,"DATATYPE"); strcpy(yylval.nd_obj.name,(yytext)); return CHAR; }
+"void"                      { rec(yytext,"DATATYPE"); strcpy(yylval.nd_obj.name,(yytext)); return VOID; }
+"return"                    { rec(yytext,"KEYWORD"); strcpy(yylval.nd_obj.name,(yytext)); return RETURN; }
+"for"	                    { rec(yytext,"KEYWORD"); strcpy(yylval.nd_obj.name,(yytext)); return FOR; }
+"if"	                    { rec(yytext,"KEYWORD"); strcpy(yylval.nd_obj.name,(yytext)); return IF; }
+"else"	                    { rec(yytext,"KEYWORD"); strcpy(yylval.nd_obj.name,(yytext)); return ELSE; }
+"while"	                    { rec(yytext,"KEYWORD"); strcpy(yylval.nd_obj.name,(yytext)); return WHILE; }
+"do"	                    { rec(yytext,"KEYWORD"); strcpy(yylval.nd_obj.name,(yytext)); return DO; }
+"break"	                    { rec(yytext,"KEYWORD"); strcpy(yylval.nd_obj.name,(yytext)); return BREAK; }
+"continue"	                { rec(yytext,"KEYWORD"); strcpy(yylval.nd_obj.name,(yytext)); return CONTINUE; }
 "double"                    { fprintf(stderr, "Line %d: error: unsupported type \"double\" (use int, float, or char)\n", countn+1); yyerror("unsupported type: double"); return 0; }
-^"#include"[ ]*<.+\.h>      { strcpy(yylval.nd_obj.name,(yytext)); return INCLUDE; }
-"true"                      { strcpy(yylval.nd_obj.name,(yytext)); return TRUE; }
-"false"                     { strcpy(yylval.nd_obj.name,(yytext)); return FALSE; }
-{digit}+                    { strcpy(yylval.nd_obj.name,(yytext)); return NUMBER; }
-{digit}+\.{digit}{1,6}      { strcpy(yylval.nd_obj.name,(yytext)); return FLOAT_NUM; }
-{alpha}({alpha}|{digit})*   { strcpy(yylval.nd_obj.name,(yytext)); return ID; }
-{unary}                     { strcpy(yylval.nd_obj.name,(yytext)); return UNARY; }
-"<="                        { strcpy(yylval.nd_obj.name,(yytext)); return LE; }
-">="                        { strcpy(yylval.nd_obj.name,(yytext)); return GE; }
-"=="                        { strcpy(yylval.nd_obj.name,(yytext)); return EQ; }
-"!="                        { strcpy(yylval.nd_obj.name,(yytext)); return NE; }
-">"	                        { strcpy(yylval.nd_obj.name,(yytext)); return GT; }
-"<"	                        { strcpy(yylval.nd_obj.name,(yytext)); return LT; }
-"&&"	                    { strcpy(yylval.nd_obj.name,(yytext)); return AND; }
-"||"	                    { strcpy(yylval.nd_obj.name,(yytext)); return OR; }
-"!"                         { strcpy(yylval.nd_obj.name,(yytext)); return NOT; }
-"+"                         { strcpy(yylval.nd_obj.name,(yytext)); return ADD; }
-"-"                         { strcpy(yylval.nd_obj.name,(yytext)); return SUBTRACT; }
-"/"                         { strcpy(yylval.nd_obj.name,(yytext)); return DIVIDE; }
-"*"                         { strcpy(yylval.nd_obj.name,(yytext)); return MULTIPLY; }
-"%"                         { strcpy(yylval.nd_obj.name,(yytext)); return MODULO; }
+^"#include"[ ]*<.+\.h>      { rec(yytext,"KEYWORD"); strcpy(yylval.nd_obj.name,(yytext)); return INCLUDE; }
+"true"                      { rec(yytext,"KEYWORD"); strcpy(yylval.nd_obj.name,(yytext)); return TRUE; }
+"false"                     { rec(yytext,"KEYWORD"); strcpy(yylval.nd_obj.name,(yytext)); return FALSE; }
+{digit}+                    { rec(yytext,"NUMBER"); strcpy(yylval.nd_obj.name,(yytext)); return NUMBER; }
+{digit}+\.{digit}{1,6}      { rec(yytext,"NUMBER"); strcpy(yylval.nd_obj.name,(yytext)); return FLOAT_NUM; }
+{alpha}({alpha}|{digit})*   { rec(yytext,"IDENTIFIER"); strcpy(yylval.nd_obj.name,(yytext)); return ID; }
+{unary}                     { rec(yytext,"OPERATOR"); strcpy(yylval.nd_obj.name,(yytext)); return UNARY; }
+"<="                        { rec(yytext,"OPERATOR"); strcpy(yylval.nd_obj.name,(yytext)); return LE; }
+">="                        { rec(yytext,"OPERATOR"); strcpy(yylval.nd_obj.name,(yytext)); return GE; }
+"=="                        { rec(yytext,"OPERATOR"); strcpy(yylval.nd_obj.name,(yytext)); return EQ; }
+"!="                        { rec(yytext,"OPERATOR"); strcpy(yylval.nd_obj.name,(yytext)); return NE; }
+">"	                        { rec(yytext,"OPERATOR"); strcpy(yylval.nd_obj.name,(yytext)); return GT; }
+"<"	                        { rec(yytext,"OPERATOR"); strcpy(yylval.nd_obj.name,(yytext)); return LT; }
+"&&"	                    { rec(yytext,"OPERATOR"); strcpy(yylval.nd_obj.name,(yytext)); return AND; }
+"||"	                    { rec(yytext,"OPERATOR"); strcpy(yylval.nd_obj.name,(yytext)); return OR; }
+"!"                         { rec(yytext,"OPERATOR"); strcpy(yylval.nd_obj.name,(yytext)); return NOT; }
+"+"                         { rec(yytext,"OPERATOR"); strcpy(yylval.nd_obj.name,(yytext)); return ADD; }
+"-"                         { rec(yytext,"OPERATOR"); strcpy(yylval.nd_obj.name,(yytext)); return SUBTRACT; }
+"/"                         { rec(yytext,"OPERATOR"); strcpy(yylval.nd_obj.name,(yytext)); return DIVIDE; }
+"*"                         { rec(yytext,"OPERATOR"); strcpy(yylval.nd_obj.name,(yytext)); return MULTIPLY; }
+"%"                         { rec(yytext,"OPERATOR"); strcpy(yylval.nd_obj.name,(yytext)); return MODULO; }
+"="                         { rec(yytext,"OPERATOR"); return '='; }
+[();{},.]                   { rec(yytext,"DELIMITER"); return *yytext; }
 \/\/.*                      { ; }
 \/\*(.*\n)*.*\*\/           { int _n; for(_n=0; yytext[_n]; _n++) if(yytext[_n]=='\n') countn++; }
 [ \t]*                      { ; }
 [\n]                        { countn++; }
-.	                        { return *yytext; }
-["].*["]                    { strcpy(yylval.nd_obj.name,(yytext)); return STR; }
-['].[']                     { strcpy(yylval.nd_obj.name,(yytext)); return CHARACTER; }
+["].*["]                    { rec(yytext,"STRING"); strcpy(yylval.nd_obj.name,(yytext)); return STR; }
+['].[']                     { rec(yytext,"STRING"); strcpy(yylval.nd_obj.name,(yytext)); return CHARACTER; }
+.	                        { rec(yytext,"DELIMITER"); return *yytext; }
 
 %%
 

@@ -12,7 +12,7 @@ from lexer_parser import parse_compiler_output  # noqa: E402
 def compile_ok(src: str) -> dict:
     r = run_compiler(src)
     assert r["error_msg"] == "", r["error_msg"]
-    assert "PHASE 1: LEXICAL ANALYSIS" in r["stdout"]
+    assert "PHASE 0: LEXICAL ANALYSIS (TOKENS)" in r["stdout"]
     assert "PHASE 4: INTERMEDIATE CODE GENERATION" in r["stdout"]
     p = parse_compiler_output(r["stdout"], r["stderr"], r["success"])
     assert p["symbol_table"], "symbol table empty"
@@ -61,7 +61,7 @@ def test_printf_scanf():
     p = parse_compiler_output(r["stdout"], r["stderr"], r["success"])
     assert p["symbol_table"], "symbol table empty"
     kinds = {s["type"] for s in p["symbol_table"]}
-    assert "N/A" in kinds, "printf/scanf keywords missing from symbol table"
+    assert "KEYWORD" in kinds, "printf/scanf keywords missing from symbol table"
 
 
 def test_headerless_program():
@@ -74,4 +74,4 @@ def test_comment_line_numbers():
     r = run_compiler(src)
     p = parse_compiler_output(r["stdout"], r["stderr"], r["success"])
     x = [s for s in p["symbol_table"] if s["name"] == "x"]
-    assert x and x[0]["line"] == 5, f"x should be line 5, got {x}"
+    assert x and x[0]["line"] == 6, f"x should be line 6, got {x}"

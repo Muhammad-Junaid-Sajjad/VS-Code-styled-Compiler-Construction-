@@ -15,7 +15,8 @@ import re
 
 # ── Section header patterns (real `PHASE n:` headers, case-insensitive) ──────
 SECTION_HEADERS = {
-    'symtable': re.compile(r'PHASE\s*1\s*:\s*LEXICAL', re.I),
+    'tokens'  : re.compile(r'PHASE\s*0\s*:\s*LEXICAL', re.I),
+    'symtable': re.compile(r'PHASE\s*1\s*:\s*SYMBOL', re.I),
     'tree'    : re.compile(r'PHASE\s*2\s*:\s*SYNTAX', re.I),
     'errors'  : re.compile(r'PHASE\s*3\s*:\s*SEMANTIC', re.I),
     'ircode'  : re.compile(r'PHASE\s*4\s*:\s*INTERMEDIATE', re.I),
@@ -172,13 +173,28 @@ def _parse_tokens(section: str, full_output: str) -> list:
     Try to extract tokens from the dedicated section.
     If that yields nothing, fall back to a simple C tokeniser on full_output.
     """
-    tokens = _extract_tokens_from_text(section)
+    tokens = _extract_phase0_tokens(section)          # real lexer token table (PHASE 0)
+    if not tokens:
+        tokens = _extract_tokens_from_text(section)
     if not tokens:
         tokens = _extract_tokens_from_text(full_output)
     if not tokens:
         # Last resort: tokenise ourselves
         tokens = _fallback_tokenise(full_output if full_output.strip() else section)
     return tokens
+
+
+def _extract_phase0_tokens(text: str) -> list:
+    """Parse the compiler's PHASE-0 token table: `CLASS  LEXEME  LINE`."""
+    out = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith('CLASS') or re.match(r'^[-_]+$', stripped):
+            continue
+        cols = stripped.split()
+        if len(cols) >= 3:
+            out.append({'type': cols[0], 'value': cols[1], 'line': _safe_int(cols[2])})
+    return out
 
 
 def _extract_tokens_from_text(text: str) -> list:
@@ -253,29 +269,25 @@ def _fallback_tokenise(source: str) -> list:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _parse_symtable(section: str) -> list:
-    """PHASE-1 rows are `NAME  DATATYPE  TYPE  LINE` (T018, FR-038).
-    Maps to the 5-field Symbol: scope='global', value = const literal or None."""
+    """PHASE-1 rows are `NAME  DATATYPE  KIND  LINE` — a categorized symbol table
+    (DATATYPE/KEYWORD/OPERATOR/DELIMITER/VARIABLE/FUNCTION/CONSTANT).
+    Maps to the 5-field Symbol: type = KIND, scope='global', value = const or None."""
     symbols = []
     for line in section.splitlines():
         stripped = line.strip()
         if not stripped:
             continue
-        if re.match(r'^[-=|_+]+$', stripped) or re.match(r'^SYMBOL\b', stripped, re.I):
+        if re.match(r'^[-=|_+]+$', stripped) or stripped.startswith('NAME'):
             continue   # separator line + column header
         cols = stripped.split()
-        if len(cols) < 3:
+        if len(cols) < 4:
             continue
-        # Formats: `name type kind line`  OR  `name kind line` (headers: no datatype)
-        if len(cols) >= 4 and cols[3].isdigit():
-            name, dtype, kind, line = cols[0], cols[1], cols[2], cols[3]
-        else:
-            name, kind, line = cols[0], cols[1], cols[2]
-            dtype = ''
+        name, dtype, kind, line = cols[0], cols[1], cols[2], cols[3]
         symbols.append({
             'name' : name,
-            'type' : dtype,
+            'type' : kind,
             'scope': 'global',
-            'value': name if kind.lower() == 'constant' else None,
+            'value': name if kind.upper() == 'CONSTANT' else None,
             'line' : _safe_int(line),
             'used' : True,
         })
