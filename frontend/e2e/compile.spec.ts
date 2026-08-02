@@ -20,15 +20,26 @@ test('Execute compiles & runs C in the terminal', async ({ page }) => {
   await page.goto('/');
   await page.locator('.explorer-file', { hasText: 'hello.c' }).click();
   await page.locator('#exec-btn').click();
-  await expect(page.locator('#term-body .term-out')).toContainText('Hello CompileViz!', { timeout: 20_000 });
-  await expect(page.locator('#term-body .term-exit')).toContainText('exit code: 0');
+  await expect(page.locator('.term-body .term-out')).toContainText('Hello CompileViz!', { timeout: 20_000 });
+  await expect(page.locator('.term-body .term-exit')).toContainText('exit code: 0');
 });
 
 test('Execute runs Python in the terminal', async ({ page }) => {
   await page.goto('/');
   await page.locator('.explorer-file', { hasText: 'hello.py' }).click();
   await page.locator('#exec-btn').click();
-  await expect(page.locator('#term-body .term-out')).toContainText('30', { timeout: 20_000 });
+  await expect(page.locator('.term-body .term-out')).toContainText('30', { timeout: 20_000 });
+});
+
+test('terminal shell: typing commands works (help)', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.btab', { hasText: 'TERMINAL' }).click();
+  const ti = page.locator('.term-input');
+  await ti.click();
+  await ti.pressSequentially('help');
+  await ti.press('Enter');
+  await expect(page.locator('.term-body .term-cmd').last()).toContainText('help');
+  await expect(page.locator('.term-body .term-out').last()).toContainText('run <sample>');
 });
 
 test('SC-010: all 4 phases render within 2 s of clicking Run', async ({ page }) => {

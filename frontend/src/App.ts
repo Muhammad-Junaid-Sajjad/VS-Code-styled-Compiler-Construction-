@@ -1,10 +1,11 @@
 /** VS Code-style IDE shell + wiring (T033–T038, FR-030…FR-044). */
 import { useStore } from './state/store';
 import { SAMPLES } from './samples/catalog';
-import { compile, run as runCode, httpMessage } from './api/client';
+import { compile, httpMessage } from './api/client';
 import { createEditor } from './components/Editor';
 import { renderExplorer } from './components/Explorer';
-import { renderResult, renderTerminal, emptyState } from './components/panels/render';
+import { mountTerminal } from './components/Terminal';
+import { renderResult, emptyState } from './components/panels/render';
 import type { Language, Phases } from './types/contract';
 
 export function mountApp(root: HTMLElement): void {
@@ -84,16 +85,8 @@ export function mountApp(root: HTMLElement): void {
   emptyState(containers.tree, '🌳', 'No parse tree yet', 'Run the compiler to visualize the tree.');
   emptyState(containers.symbols, '📋', 'No symbols yet', 'Symbol table populates after compilation.');
 
-  // Terminal panel: VS Code-style compile & run results (accumulated across runs).
-  containers.term.innerHTML =
-    `<div class="term-toolbar"><span>💻 Compile &amp; Run Terminal</span><button id="term-clear">Clear</button></div>` +
-    `<div id="term-body"></div>`;
-  const termBody = containers.term.querySelector('#term-body') as HTMLElement;
-  renderTerminal(termBody, useStore.getState().terminal);
-  containers.term.querySelector('#term-clear')!.addEventListener('click', () => {
-    useStore.getState().clearTerminal();
-    renderTerminal(termBody, []);
-  });
+  // Terminal: VS Code-grade interactive shell (typed commands + Execute results)
+  const terminal = mountTerminal(containers.term, { onCompile: run });
 
   const toastEl = root.querySelector('#toast') as HTMLElement;
   let toastTimer: number | undefined;
@@ -189,29 +182,15 @@ export function mountApp(root: HTMLElement): void {
   (root.querySelector('#run-btn') as HTMLElement).addEventListener('click', run);
   (root.querySelector('#act-run') as HTMLElement).addEventListener('click', run);
 
-  async function executeCode() {
-    const s = useStore.getState();
-    try {
-      const r = await runCode(s.editorCode, s.language);
-      s.appendTerminal({
-        command: r.command || `run (${s.language})`,
-        output: r.output,
-        exitCode: r.exit_code,
-        time: new Date().toLocaleTimeString(),
-      });
-      renderTerminal(termBody, useStore.getState().terminal);
-      // Switch to the TERMINAL tab so the result is visible.
-      root.querySelectorAll('.btab').forEach((b) => b.classList.remove('active'));
-      root.querySelectorAll('.bpanel').forEach((p) => p.classList.remove('active'));
-      const tTab = Array.from(root.querySelectorAll('.btab')).find((b) => b.getAttribute('data-b') === 'terminal');
-      tTab?.classList.add('active');
-      (root.querySelector('#bp-terminal') as HTMLElement).classList.add('active');
-      toast(r.success ? 'success' : 'error', `exit code ${r.exit_code}`);
-    } catch (err) {
-      toast('error', 'Execute failed: ' + (err instanceof Error ? err.message : String(err)));
-    }
-  }
-  (root.querySelector('#exec-btn') as HTMLElement).addEventListener('click', executeCode);
+  // ▶ Execute → switch to the TERMINAL tab and run the current code.
+  (root.querySelector('#exec-btn') as HTMLElement).addEventListener('click', () => {
+    root.querySelectorAll('.btab').forEach((b) => b.classList.remove('active'));
+    root.querySelectorAll('.bpanel').forEach((p) => p.classList.remove('active'));
+    const tTab = Array.from(root.querySelectorAll('.btab')).find((b) => b.getAttribute('data-b') === 'terminal');
+    tTab?.classList.add('active');
+    (root.querySelector('#bp-terminal') as HTMLElement).classList.add('active');
+    terminal.runCurrent();
+  });
 
   // Language selector (FR-031)
   const sbLang = root.querySelector('#sb-lang') as HTMLElement;
