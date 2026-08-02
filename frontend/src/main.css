@@ -88,6 +88,12 @@ html, body { height: 100%; overflow: hidden; background: #111; }
 .tok-STRING { background: #3d2018; color: #ce9178; }
 .tok-PUNCTUATION { background: #2d2d2d; color: #999; }
 .tok-TYPE { background: #1e2d3d; color: #4ec9b0; }
+.tok-DATATYPE { background: #1e2d3d; color: #4ec9b0; }
+.tok-DELIMITER { background: #2d2d2d; color: #999; }
+.tok-PUNCTUATION { background: #2d2d2d; color: #999; }
+.tok-BUILTIN { background: #1a3050; color: #4ec9b0; }
+.tok-INDENT, .tok-DEDENT, .tok-NEWLINE { background: #2a2a2a; color: #777; }
+.tok-COMMENT { background: #222c22; color: #6a9955; font-style: italic; }
 .tok-ERROR { background: #4d1c1c; color: #f48771; }
 
 /* IR */
