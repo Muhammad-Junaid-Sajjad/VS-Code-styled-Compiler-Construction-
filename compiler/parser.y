@@ -37,6 +37,7 @@
 	int temp_var=0;
 	int label=0;
 	int is_for=0;
+	int loop_top=0;    /* T016e: do-while loop-back label */
 	char buff[100];
 	char errors[10][100];
 	char reserved[10][10] = {"int", "float", "char", "void", "if", "else", "for", "main", "return", "include"};
@@ -68,11 +69,22 @@
 			char else_body[5];
 		} nd_obj3;
 	} 
-%token VOID 
-%token <nd_obj> CHARACTER PRINTFF SCANFF INT FLOAT CHAR FOR IF ELSE TRUE FALSE NUMBER FLOAT_NUM ID LE GE EQ NE GT LT AND OR STR ADD MULTIPLY DIVIDE SUBTRACT UNARY INCLUDE RETURN 
+%token VOID
+%token <nd_obj> CHARACTER PRINTFF SCANFF INT FLOAT CHAR FOR IF ELSE WHILE DO BREAK CONTINUE TRUE FALSE NUMBER FLOAT_NUM ID LE GE EQ NE GT LT AND OR NOT STR ADD MULTIPLY DIVIDE SUBTRACT MODULO UNARY INCLUDE RETURN
 %type <nd_obj> headers main body return datatype statement arithmetic relop program else
 %type <nd_obj2> init value expression
 %type <nd_obj3> condition
+
+/* Operator precedence/associativity (FR-002, T016c) — lowest first:
+   || < && < relational < additive < multiplicative; unary tightest. */
+%left OR
+%left AND
+%left EQ NE
+%left LT GT LE GE
+%left ADD SUBTRACT
+%left MULTIPLY DIVIDE MODULO
+%right NOT
+%right UNARY
 
 %%
 
@@ -81,8 +93,9 @@ program: headers main '(' ')' '{' body return '}' { $2.nd = mknode($6.nd, $7.nd,
 } 
 ;
 
-headers: headers headers { $$.nd = mknode($1.nd, $2.nd, "headers"); }
+headers: headers INCLUDE { add('H'); } { $$.nd = mknode($1.nd, mknode(NULL, NULL, $2.name), "headers"); }
 | INCLUDE { add('H'); } { $$.nd = mknode(NULL, NULL, $1.name); }
+| { $$.nd = NULL; }   /* T016d: headers optional — header-less programs valid (FR-002/§5.9) */
 ;
 
 main: datatype ID { add('F'); }
@@ -102,7 +115,22 @@ body: FOR { add('K'); is_for = 1; } '(' statement ';' condition ';' statement ')
 	sprintf(icg[ic_idx++], "JUMP to %s\n", $6.if_body);
 	sprintf(icg[ic_idx++], "\nLABEL %s:\n", $6.else_body);
 }
-| IF { add('K'); is_for = 0; } '(' condition ')' { sprintf(icg[ic_idx++], "\nLABEL %s:\n", $4.if_body); } '{' body '}' { sprintf(icg[ic_idx++], "\nLABEL %s:\n", $4.else_body); } else { 
+| WHILE { add('K'); is_for = 1; } '(' condition ')' '{' body '}' {
+	struct node *cnd = $4.nd;
+	$$.nd = mknode(cnd, $7.nd, "while");
+	/* condition (for-mode) emits: LABEL {if_body}: if NOT (cond) GOTO {else_body} */
+	sprintf(icg[ic_idx++], "\nGOTO %s\n", $4.if_body);     /* back to loop check */
+	sprintf(icg[ic_idx++], "\nLABEL %s:\n", $4.else_body); /* loop exit */
+}
+| DO { add('K'); is_for = 0; loop_top = label++; sprintf(icg[ic_idx++], "\nLABEL L%d:\n", loop_top); } '{' body '}' WHILE '(' value relop value ')' ';' {
+	/* mid-rule action occupies $2: $3={ $4=body $5=} $6=WHILE $7=( $8=value $9=relop $10=value $11=) $12=; */
+	struct node *cnd = mknode($8.nd, $10.nd, $9.name);
+	$$.nd = mknode($4.nd, cnd, "do-while");
+	sprintf(icg[ic_idx++], "\nif NOT (%s %s %s) GOTO L%d\n", $8.name, $9.name, $10.name, label);
+	sprintf(icg[ic_idx++], "\nGOTO L%d\n", loop_top);
+	sprintf(icg[ic_idx++], "\nLABEL L%d:\n", label++);
+}
+| IF { add('K'); is_for = 0; } '(' condition ')' { sprintf(icg[ic_idx++], "\nLABEL %s:\n", $4.if_body); } '{' body '}' { sprintf(icg[ic_idx++], "\nLABEL %s:\n", $4.else_body); } else {
 	struct node *iff = mknode($4.nd, $8.nd, $1.name); 
 	$$.nd = mknode(iff, $11.nd, "if-else"); 
 	sprintf(icg[ic_idx++], "GOTO next\n");
@@ -242,7 +270,7 @@ init: '=' value { $$.nd = $2.nd; sprintf($$.type, $2.type); strcpy($$.name, $2.n
 | { sprintf($$.type, "null"); $$.nd = mknode(NULL, NULL, "NULL"); strcpy($$.name, "NULL"); }
 ;
 
-expression: expression arithmetic expression { 
+expression: expression arithmetic expression %prec ADD {
 	if(!strcmp($1.type, $3.type)) {
 		sprintf($$.type, $1.type);
 		$$.nd = mknode($1.nd, $3.nd, $2.name); 
@@ -286,10 +314,11 @@ expression: expression arithmetic expression {
 | value { strcpy($$.name, $1.name); sprintf($$.type, $1.type); $$.nd = $1.nd; }
 ;
 
-arithmetic: ADD 
-| SUBTRACT 
+arithmetic: ADD
+| SUBTRACT
 | MULTIPLY
 | DIVIDE
+| MODULO
 ;
 
 relop: LT
