@@ -119,7 +119,7 @@ def compile_code():
 
         # ── 5. Build and return response ─────────────────────────────────────
         response = CompileResponse(
-            success     = run_result['success'],
+            success     = run_result['success'] and not parsed['errors'],
             language    = language,
             tokens      = parsed['tokens'],
             parse_tree  = parse_tree,
@@ -165,12 +165,12 @@ def tokenize_only():
 # ─────────────────────────────────────────────────────────────────────────────
 
 _TREE_SECTION_RE = re.compile(
-    r'(parse\s*tree|syntax\s*tree|AST|abstract\s*syntax)', re.I
+    r'PHASE\s*2\s*:\s*SYNTAX|parse\s*tree|syntax\s*tree|AST|abstract\s*syntax', re.I
 )
 
 
 def _extract_tree_section(stdout: str) -> str:
-    """Find the parse-tree section in raw compiler output ('' if not found)."""
+    """Find the PHASE-2 derivation-tree section in raw compiler output ('' if not found)."""
     lines       = stdout.splitlines()
     in_section  = False
     buf         = []
@@ -180,7 +180,8 @@ def _extract_tree_section(stdout: str) -> str:
             in_section = True
             continue
         if in_section:
-            if re.match(r'^={3,}|^-{3,}', line.strip()):
+            # Stop at the next section header (=== / --- / PHASE n:)
+            if re.match(r'^={3,}|^-{3,}|PHASE\s*\d+\s*:', line.strip(), re.I):
                 break
             buf.append(line)
 

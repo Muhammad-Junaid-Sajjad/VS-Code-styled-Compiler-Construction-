@@ -250,18 +250,21 @@ def _synthetic_tree(tokens: list) -> dict:
 
         # Decide statement type from first keyword/type token
         first = line_toks[0]
-        if first['type'] in ('TYPE', 'KEYWORD') and first['value'] in (
-            'int','float','double','char','void','long','short'
+        ftype = first.get('class', first.get('type', 'IDENTIFIER'))
+        fval  = first.get('token', first.get('value', ''))
+        if ftype in ('TYPE', 'KEYWORD') and fval in (
+            'int', 'float', 'double', 'char', 'void', 'long', 'short'
         ):
             stmt = _node(f"VarDecl (line {ln})", cls='tl-decl')
-        elif first['value'] in ('if','else','while','for','do','switch'):
-            stmt = _node(f"{first['value'].capitalize()}Stmt (line {ln})", cls='tl-stmt')
-        elif first['value'] == 'return':
+        elif fval in ('if', 'else', 'while', 'for', 'do', 'switch'):
+            stmt = _node(f"{fval.capitalize()}Stmt (line {ln})", cls='tl-stmt')
+        elif fval == 'return':
             stmt = _node(f"ReturnStmt (line {ln})", cls='tl-stmt')
-        elif first['type'] == 'IDENTIFIER':
-            next_toks = [t for t in line_toks[1:] if t['type'] == 'PUNCTUATION']
-            if next_toks and next_toks[0]['value'] == '(':
-                stmt = _node(f"CallExpr: {first['value']} (line {ln})", cls='tl-expr')
+        elif ftype == 'IDENTIFIER':
+            next_toks = [t for t in line_toks[1:]
+                         if t.get('class', t.get('type')) == 'PUNCTUATION']
+            if next_toks and next_toks[0].get('token', next_toks[0].get('value')) == '(':
+                stmt = _node(f"CallExpr: {fval} (line {ln})", cls='tl-expr')
             else:
                 stmt = _node(f"AssignStmt (line {ln})", cls='tl-stmt')
         else:
@@ -269,8 +272,9 @@ def _synthetic_tree(tokens: list) -> dict:
 
         # Add each token as a leaf
         for tok in line_toks:
-            label = f"{tok['type']}: {tok['value']}"
-            stmt['children'].append(_node(label, cls='tl-leaf'))
+            ttype = tok.get('class', tok.get('type', '?'))
+            tval  = tok.get('token', tok.get('value', ''))
+            stmt['children'].append(_node(f"{ttype}: {tval}", cls='tl-leaf'))
 
         root['children'].append(stmt)
 
