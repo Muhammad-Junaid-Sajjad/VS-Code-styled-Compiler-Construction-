@@ -1,9 +1,14 @@
 import os
 import re
 import json
+import sys
 import time
 import logging
 import threading
+
+# Deep parse trees (many declarations) exceed Python's default JSON recursion
+# limit — raise it so large-but-valid programs serialize (found live-testing).
+sys.setrecursionlimit(10000)
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 

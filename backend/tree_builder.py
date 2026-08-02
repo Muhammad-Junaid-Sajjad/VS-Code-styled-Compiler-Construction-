@@ -108,7 +108,8 @@ def _try_indented(text: str) -> dict | None:
     if indent_unit == 0:
         indent_unit = 2
 
-    # Build stack-based tree
+    # Build stack-based tree (iterative — no recursion), capped at a safe depth
+    MAX_DEPTH = 300   # guards JSON serialization on pathological nesting
     root = None
     stack = []   # list of (indent_level, node)
 
@@ -128,6 +129,10 @@ def _try_indented(text: str) -> dict | None:
             while len(stack) > 1 and stack[-1][0] >= level:
                 stack.pop()
             parent = stack[-1][1]
+            if len(stack) >= MAX_DEPTH:
+                # Truncate pathological depth — append a marker, stop descending.
+                parent['children'].append(_node('... (truncated)'))
+                continue
             parent['children'].append(node)
             stack.append((level, node))
 
