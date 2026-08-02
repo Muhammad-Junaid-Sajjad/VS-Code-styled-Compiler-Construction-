@@ -203,6 +203,42 @@ def tokenize_only():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+#  ROUTE: POST /api/run  — REAL compile + execute (VS Code-style terminal result)
+#  Request: { "code": "...", "language": "c" | "python" }
+#  C: gcc -Wall -o main main.c  →  run ./main   (compiler errors shown)
+#  Python: python3 main.py
+#  Enforces timeout / resource caps / temp cleanup / no shell interpolation.
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.route('/api/run', methods=['POST'])
+def run_code_route():
+    data = request.get_json(silent=True)
+    if not data or not isinstance(data, dict) or 'code' not in data:
+        return jsonify({'success': False, 'error': 'Request body must be JSON with a "code" field.'}), 400
+
+    language = data.get('language', 'c')
+    if language not in LANGUAGES:
+        return jsonify({'success': False, 'error': f"Unsupported language '{language}'."}), 400
+    source = data['code']
+    if not isinstance(source, str) or not source.strip():
+        return jsonify({'success': False, 'command': '', 'output': 'Source code is empty.',
+                        'exit_code': 0, 'error': 'empty input'}), 200
+
+    if not _compile_lock.acquire(blocking=False):
+        return jsonify({'success': False, 'command': '', 'output': '',
+                        'exit_code': 0, 'error': 'Another execution is in progress.'}), 429
+    try:
+        from code_runner import run_code
+        result = run_code(source, language)
+        logger.info(json.dumps({'event': 'run', 'language': language,
+                                'success': result.get('success'),
+                                'exit_code': result.get('exit_code', -1)}))
+        return jsonify(result), 200
+    finally:
+        _compile_lock.release()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 #  HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
 

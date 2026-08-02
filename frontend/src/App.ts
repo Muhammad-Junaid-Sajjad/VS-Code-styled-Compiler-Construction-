@@ -1,10 +1,10 @@
 /** VS Code-style IDE shell + wiring (T033–T038, FR-030…FR-044). */
 import { useStore } from './state/store';
 import { SAMPLES } from './samples/catalog';
-import { compile, httpMessage } from './api/client';
+import { compile, run as runCode, httpMessage } from './api/client';
 import { createEditor } from './components/Editor';
 import { renderExplorer } from './components/Explorer';
-import { renderResult, emptyState } from './components/panels/render';
+import { renderResult, renderTerminal, emptyState } from './components/panels/render';
 import type { Language, Phases } from './types/contract';
 
 export function mountApp(root: HTMLElement): void {
@@ -26,18 +26,23 @@ export function mountApp(root: HTMLElement): void {
     <div id="center">
       <div id="editor-tabs"><div class="editor-tab active" id="tab-label">${first.name}</div></div>
       <div id="editor-area"></div>
-      <button id="run-btn">▶ Run</button>
+      <div id="run-actions">
+        <button id="run-btn">▶ Run Compiler</button>
+        <button id="exec-btn" title="Compile & run in the terminal">▶ Execute</button>
+      </div>
       <div id="resizer-b" title="Drag to resize bottom panel"></div>
       <div id="bottom-panel">
         <div id="bottom-tabs">
           <div class="btab active" data-b="tokens">TOKENS</div>
           <div class="btab" data-b="ir">IR CODE</div>
           <div class="btab" data-b="diagnostics">DIAGNOSTICS</div>
+          <div class="btab" data-b="terminal">TERMINAL</div>
         </div>
         <div id="bottom-content">
           <div class="bpanel active" id="bp-tokens"></div>
           <div class="bpanel" id="bp-ir"></div>
           <div class="bpanel" id="bp-diagnostics"></div>
+          <div class="bpanel" id="bp-terminal"></div>
         </div>
       </div>
     </div>
@@ -66,6 +71,7 @@ export function mountApp(root: HTMLElement): void {
     tokens:  root.querySelector('#bp-tokens') as HTMLElement,
     ir:      root.querySelector('#bp-ir') as HTMLElement,
     diag:    root.querySelector('#bp-diagnostics') as HTMLElement,
+    term:    root.querySelector('#bp-terminal') as HTMLElement,
     tree:    root.querySelector('#rp-parseTree') as HTMLElement,
     phases:  root.querySelector('#rp-phaseFlow') as HTMLElement,
     symbols: root.querySelector('#rp-symbolTable') as HTMLElement,
@@ -77,6 +83,17 @@ export function mountApp(root: HTMLElement): void {
   emptyState(containers.diag, '✅', 'No diagnostics', 'Errors and warnings appear here.');
   emptyState(containers.tree, '🌳', 'No parse tree yet', 'Run the compiler to visualize the tree.');
   emptyState(containers.symbols, '📋', 'No symbols yet', 'Symbol table populates after compilation.');
+
+  // Terminal panel: VS Code-style compile & run results (accumulated across runs).
+  containers.term.innerHTML =
+    `<div class="term-toolbar"><span>💻 Compile &amp; Run Terminal</span><button id="term-clear">Clear</button></div>` +
+    `<div id="term-body"></div>`;
+  const termBody = containers.term.querySelector('#term-body') as HTMLElement;
+  renderTerminal(termBody, useStore.getState().terminal);
+  containers.term.querySelector('#term-clear')!.addEventListener('click', () => {
+    useStore.getState().clearTerminal();
+    renderTerminal(termBody, []);
+  });
 
   const toastEl = root.querySelector('#toast') as HTMLElement;
   let toastTimer: number | undefined;
@@ -129,7 +146,7 @@ export function mountApp(root: HTMLElement): void {
     } finally {
       s.setRunning(false);
       (root.querySelector('#run-btn') as HTMLElement).classList.remove('running');
-      (root.querySelector('#run-btn') as HTMLElement).textContent = '▶ Run';
+      (root.querySelector('#run-btn') as HTMLElement).textContent = '▶ Run Compiler';
     }
   }
 
@@ -168,9 +185,33 @@ export function mountApp(root: HTMLElement): void {
     });
   });
 
-  // Run controls
+  // Run controls: Run Compiler (visualize 4 phases) + Execute (real compile & run)
   (root.querySelector('#run-btn') as HTMLElement).addEventListener('click', run);
   (root.querySelector('#act-run') as HTMLElement).addEventListener('click', run);
+
+  async function executeCode() {
+    const s = useStore.getState();
+    try {
+      const r = await runCode(s.editorCode, s.language);
+      s.appendTerminal({
+        command: r.command || `run (${s.language})`,
+        output: r.output,
+        exitCode: r.exit_code,
+        time: new Date().toLocaleTimeString(),
+      });
+      renderTerminal(termBody, useStore.getState().terminal);
+      // Switch to the TERMINAL tab so the result is visible.
+      root.querySelectorAll('.btab').forEach((b) => b.classList.remove('active'));
+      root.querySelectorAll('.bpanel').forEach((p) => p.classList.remove('active'));
+      const tTab = Array.from(root.querySelectorAll('.btab')).find((b) => b.getAttribute('data-b') === 'terminal');
+      tTab?.classList.add('active');
+      (root.querySelector('#bp-terminal') as HTMLElement).classList.add('active');
+      toast(r.success ? 'success' : 'error', `exit code ${r.exit_code}`);
+    } catch (err) {
+      toast('error', 'Execute failed: ' + (err instanceof Error ? err.message : String(err)));
+    }
+  }
+  (root.querySelector('#exec-btn') as HTMLElement).addEventListener('click', executeCode);
 
   // Language selector (FR-031)
   const sbLang = root.querySelector('#sb-lang') as HTMLElement;

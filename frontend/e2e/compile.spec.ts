@@ -16,6 +16,21 @@ test('loads a Python sample and flips the language selector', async ({ page }) =
   await expect(page.locator('#sb-lang')).toContainText('Python');
 });
 
+test('Execute compiles & runs C in the terminal', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.explorer-file', { hasText: 'hello.c' }).click();
+  await page.locator('#exec-btn').click();
+  await expect(page.locator('#term-body .term-out')).toContainText('Hello CompileViz!', { timeout: 20_000 });
+  await expect(page.locator('#term-body .term-exit')).toContainText('exit code: 0');
+});
+
+test('Execute runs Python in the terminal', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.explorer-file', { hasText: 'hello.py' }).click();
+  await page.locator('#exec-btn').click();
+  await expect(page.locator('#term-body .term-out')).toContainText('30', { timeout: 20_000 });
+});
+
 test('SC-010: all 4 phases render within 2 s of clicking Run', async ({ page }) => {
   await page.goto('/');
   const t0 = Date.now();

@@ -1,6 +1,7 @@
 /** Panel renderers — Tokens/IR/Diagnostics/ParseTree/PhaseFlow/SymbolTable
  * (T038a–T038e, T047, T051; FR-036…FR-040). Imperative DOM for the store-driven shell. */
 import type { CompileResponse, Diagnostic, Phases, Symbol, Token, TreeNode } from '../../types/contract';
+import type { TerminalEntry } from '../../state/store';
 
 export function esc(s: unknown): string {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -140,6 +141,20 @@ export function renderSymbols(el: HTMLElement, symbols: Symbol[], sortKey: keyof
   el.querySelectorAll('th[data-k]').forEach((th) => {
     th.addEventListener('click', () => onSort((th as HTMLElement).dataset.k as keyof Symbol));
   });
+}
+
+/** VS Code-style terminal: real compile+run results, accumulated across runs. */
+export function renderTerminal(el: HTMLElement, entries: TerminalEntry[]): void {
+  if (!entries.length) {
+    return emptyState(el, '💻', 'Terminal', 'Press ▶ Execute to compile & run your code here.');
+  }
+  el.innerHTML = entries.map((e) => `
+    <div class="term-block">
+      <div class="term-cmd"><span class="term-prompt">❯</span> ${esc(e.command || '(no command)')}</div>
+      <pre class="term-out">${esc(e.output || '(no output)')}</pre>
+      <div class="term-exit ${e.exitCode === 0 ? 'ok' : 'err'}">exit code: ${e.exitCode}</div>
+    </div>`).join('');
+  el.scrollTop = el.scrollHeight;
 }
 
 export function renderResult(container: Record<string, HTMLElement>, result: CompileResponse | null): void {

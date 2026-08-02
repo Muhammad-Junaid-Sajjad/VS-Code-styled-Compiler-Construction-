@@ -54,6 +54,29 @@ export async function compile(code: string, language: Language): Promise<Compile
   }
 }
 
+/** RunResult — real compile+execute (/api/run), VS Code terminal style. */
+export interface RunResult {
+  success: boolean;
+  command: string;
+  output: string;
+  exit_code: number;
+  error: string;
+}
+
+export async function run(code: string, language: Language): Promise<RunResult> {
+  const resp = await fetch(`${API_BASE}/api/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ code, language }),
+  });
+  const text = await resp.text();
+  if (text.length > MAX_RESPONSE_BYTES) {
+    return { success: false, command: '', output: 'Response too large.', exit_code: -1, error: 'too large' };
+  }
+  const data: unknown = JSON.parse(text);
+  return data as RunResult;
+}
+
 /** User-facing message per HTTP code (FR-044). */
 export function httpMessage(status: number): string {
   switch (status) {

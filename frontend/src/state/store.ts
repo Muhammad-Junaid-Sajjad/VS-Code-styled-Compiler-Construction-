@@ -3,12 +3,19 @@
 import { createStore } from 'zustand/vanilla';
 import type { CompileResponse, Language, Phases } from '../types/contract';
 
-export type BottomTab = 'tokens' | 'ir' | 'diagnostics';
+export type BottomTab = 'tokens' | 'ir' | 'diagnostics' | 'terminal';
 export type RightTab = 'phaseFlow' | 'parseTree' | 'symbolTable';
 
 export interface Toast {
   level: 'info' | 'success' | 'error';
   text: string;
+}
+
+export interface TerminalEntry {
+  command: string;
+  output: string;
+  exitCode: number;
+  time: string;
 }
 
 interface CompileVizState {
@@ -21,6 +28,9 @@ interface CompileVizState {
   phases: Phases;
   running: boolean;
   toast: Toast | null;
+  terminal: TerminalEntry[];
+  appendTerminal: (e: TerminalEntry) => void;
+  clearTerminal: () => void;
   setLanguage: (l: Language) => void;
   setEditorCode: (c: string) => void;
   setCurrentFile: (f: string | null) => void;
@@ -45,6 +55,9 @@ export const useStore = createStore<CompileVizState>((set) => ({
   phases: IDLE_PHASES,
   running: false,
   toast: null,
+  terminal: [],
+  appendTerminal: (e) => set((s) => ({ terminal: [...s.terminal.slice(-99), e] })),
+  clearTerminal: () => set({ terminal: [] }),
   setLanguage: (l) => set({ language: l }),
   setEditorCode: (c) => set({ editorCode: c }),
   setCurrentFile: (f) => set({ currentFile: f }),
