@@ -62,6 +62,8 @@ Then in the IDE: pick a sample from the explorer → **▶ Run Compiler** to vis
 
 > 💡 **New here?** Read the **[Complete Project Guide](docs/GUIDE.md)** — it maps every file/folder
 > in the repo, explains what each piece does, and shows how to run, test, and demo everything.
+> For the full **[Software Requirements Specification](docs/SRS.md)** (requirements, scope,
+> contracts, subset, success criteria, test plan), see `docs/SRS.md`.
 
 ---
 
@@ -161,6 +163,7 @@ Project-Compiler/
 │   ├─ screenshot-app.png
 │   ├─ screenshot-compiled.png
 │   └─ GUIDE.md            # full file-by-file tour + how to run/test/demo
+│   └─ SRS.md              # full Software Requirements Specification (IEEE-style)
 ├── index.html              # the single-file IDE (source ≈ index121.html)
 ├── index121.html           # authored/master single-file IDE (byte-identical)
 ├── backend/                # Flask JSON API + pipelines + tests

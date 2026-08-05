@@ -48,7 +48,8 @@ Project-Compiler/
 ├── docs/
 │   ├── screenshot-app.png        IDE main window
 │   ├── screenshot-compiled.png   IDE after compiling C sample
-│   └── GUIDE.md                  this file
+│   ├── GUIDE.md                  this file
+│   └── SRS.md                    full Software Requirements Specification (IEEE-style)
 │
 ├── backend/          ★ Python Flask JSON API
 │   ├── app.py            server + all routes (/api/status · compile · tokenize · run)
