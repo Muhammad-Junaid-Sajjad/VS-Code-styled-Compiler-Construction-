@@ -60,6 +60,9 @@ make run-prod
 
 Then in the IDE: pick a sample from the explorer → **▶ Run Compiler** to visualize the 4 phases, or **▶ Execute** to really compile & run it in the terminal.
 
+> 💡 **New here?** Read the **[Complete Project Guide](docs/GUIDE.md)** — it maps every file/folder
+> in the repo, explains what each piece does, and shows how to run, test, and demo everything.
+
 ---
 
 ## 💻 Terminal Commands
@@ -154,9 +157,10 @@ Project-Compiler/
 ├── Makefile                 # build/test/run — the single source of truth
 ├── README.md                # this file
 ├── LICENSE
-├── docs/                   # README screenshots
+├── docs/                   # README screenshots + Complete Project Guide
 │   ├─ screenshot-app.png
-│   └─ screenshot-compiled.png
+│   ├─ screenshot-compiled.png
+│   └─ GUIDE.md            # full file-by-file tour + how to run/test/demo
 ├── index.html              # the single-file IDE (source ≈ index121.html)
 ├── index121.html           # authored/master single-file IDE (byte-identical)
 ├── backend/                # Flask JSON API + pipelines + tests
@@ -169,6 +173,7 @@ Project-Compiler/
 │   ├─ contract.py         # shared response contracts + language const
 │   ├─ wsgi.py             # production entrypoint (Waitress)
 │   ├─ requirements.txt
+│   ├─ README.md           # backend API + endpoints + files + tests
 │   └─ tests/             # 60 pytest tests
 ├─ compiler/               # the real native flex/bison C compiler
 │   ├─ lexer.l             # Lexical specification → tokenizer
@@ -179,6 +184,7 @@ Project-Compiler/
 │   └─ Makefile            # builds compiler/compiler
 └─ frontend/
    ├─ index.html          # single-file IDE (copied into dist/ by Vite)
+   ├─ README.md           # frontend build/dev/test reference
    ├─ e2e/                 # Playwright specs (14)
    ├─ package.json         # minimal: Vite (build) + Playwright (tests)
    └─ vite.config.ts       # outDir dist/ — Flask serves dist/index.html
