@@ -2,12 +2,17 @@
 
 ## Using the Compiler
 
+The binary reads source from **stdin** and prints the Phase 0–4 text output to stdout.
+
 ```
 lex lexer.l
 yacc -d -v parser.y
-gcc -ll -w y.tab.c
-./a.out<input1.c
+gcc -w -o compiler y.tab.c
+./compiler < input1.c
 ```
+
+> ⚠️ Do **not** use `gcc -ll` — it links `libl`'s own `main` and fails on modern toolchains.
+> The repo-level `make` target builds this binary into `compiler/compiler` for the backend.
 
 ## What is LEX?
 
@@ -139,8 +144,6 @@ int main() {
 
 ## Build & integration notes (2026-08)
 
-- **Build recipe (verified):** `lex lexer.l; yacc -d -v parser.y; gcc -w -o compiler y.tab.c`.
-  Do **not** use `gcc -ll` — it links `libl`'s own `main` and fails on modern toolchains.
 - **Invocation:** the binary reads source from **stdin** (`./compiler < file`), not argv.
 - **Token source (T016a):** the pipeline does not print a lexer token stream. The backend
   serves **"Reconstructed Tokens"** from a regex tokeniser over the source, golden-locked by
@@ -148,3 +151,6 @@ int main() {
 - **Grammar:** operator precedence/associativity follows C (FR-002); shift/reduce conflicts
   are resolved via the `%left`/`%right` table. Supported constructs are exactly the spec
   §5.9 subset; out-of-subset constructs produce a clear diagnostic (never a miscompile).
+- **Backend integration:** `backend/compiler_runner.py` shells out to this binary with
+  timeouts, resource caps, and temp-dir cleanup; the IDE surfaces its output through the
+  hybrid `Run` path (real gcc for C execution, with in-browser VM fallback).

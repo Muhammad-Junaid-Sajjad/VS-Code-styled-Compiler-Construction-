@@ -203,6 +203,9 @@ Project-Compiler/
 │   └─ Makefile            # builds compiler/compiler
 └─ frontend/
    ├─ index.html          # single-file IDE (copied into dist/ by Vite)
+   ├─ alive_audit.mjs     # live compile+run audit (C/Python + pseudo-C fallback)
+   ├─ deep_audit.mjs      # deep feature audit (search/outline/minimap/debugger/problems)
+   ├─ feat_audit.mjs      # feature audit (menus, commands, theme, palette, panels)
    ├─ README.md           # frontend build/dev/test reference
    ├─ e2e/                 # Playwright specs (14)
    ├─ package.json         # minimal: Vite (build) + Playwright (tests)
@@ -234,8 +237,8 @@ Open this repo in VS Code:
 ## 🤝 Contributing
 
 1. **The `compiler/Makefile` recipe is authoritative** — `lex lexer.l; yacc -d -v parser.y; gcc -w -o compiler y.tab.c` (no `-ll`; it links `libl`'s `main` and fails). The binary reads source from **stdin**.
-2. Edit the single-file `index.html`, keeping `index121.html` as the authored master; run `cd frontend && npm run build` to refresh `frontend/dist/`.
-3. Run `make test` before pushing — all suites must be green.
+2. Edit the single-file IDE in **`frontend/index.html`**, then sync all byte-identical copies — `index.html`, `index121.html`, and `frontend/dist/index.html` (e.g. `cp frontend/index.html index.html index121.html frontend/dist/index.html`). Run `cd frontend && npm run build` to refresh `frontend/dist/`.
+3. Run `make test` before pushing — all suites must be green. Quick live checks: `node frontend/alive_audit.mjs`, `node frontend/feat_audit.mjs`, `node frontend/deep_audit.mjs` (against `localhost:5000`).
 
 ---
 

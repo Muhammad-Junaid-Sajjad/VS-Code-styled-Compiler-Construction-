@@ -15,6 +15,16 @@ one canonical schema for both — plus a real **execution** endpoint that runs p
 
 All requests are JSON: `{ "code": "...", "language": "c" | "python" }`.
 
+## Role in the hybrid engine
+
+The IDE is a **hybrid**: the browser carries the primary compiler (in-browser JS
+`tokenize → buildSym → parse → typeCheck → genIR → optimize → makeVM`) that renders every
+panel instantly and offline. This backend is the **best-effort complement**: when reachable,
+`POST /api/run` executes real programs (gcc/python3) and `/api/compile`/`/api/tokenize`
+surface the real native pipeline. The frontend probes `/api/status` for the `⚡ backend:
+online/offline` badge and falls back to its VM when the backend is unreachable — so the
+product stays fully functional offline.
+
 ## Files
 
 - `app.py` — Flask routes, CORS allowlist, security headers, concurrency guard, structured logging.
