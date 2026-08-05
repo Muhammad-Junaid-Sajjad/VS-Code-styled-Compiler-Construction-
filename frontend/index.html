@@ -386,7 +386,7 @@ function parse(T,lang){var p=0,errs=[],nodes=0;
   return null}
  function cDecl(){var t=pk();if(!t)return null;
   if(t.type==='comment'||t.type==='pre'){ad();return null}
-  if(isTy(t)){var ty=ad().value;var n=pk();if(!n||n.type!=='ident')return N('TypeDecl',ty);ad();
+  if(isTy(t)){var ty=ad().value;var n=pk();if(!n||n.type!=='ident'){errs.push("Expected a variable name after '"+ty+"' at line "+t.line);return N('TypeDecl',ty)}ad();
    if(pk()&&pk().value==='('){ad();var ps=cParams();if(pk()&&pk().value===')')ad();return N('FuncDef',n.value,[N('ReturnType',ty),N('Params','params',ps),cBlock()])}
    var ini=null;if(pk()&&pk().value==='='){ad();ini=expr()}
    if(pk()&&pk().value===';')ad();else errs.push("Expected ';' at line "+t.line);
