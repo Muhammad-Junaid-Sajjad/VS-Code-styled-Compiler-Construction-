@@ -96,6 +96,7 @@ clear           clear the terminal
 
 - **Full 4-phase visualization** for C (Lex/Yacc/GCC) and Python (stdlib `tokenize` + `ast`) — identical output schema across both languages.
 - **Classic compiler output**: real token stream (`CLASS / LEXEME / LINE`), categorized symbol table, derivation tree, three-address IR.
+- **Consistent token classification**: datatype keywords (`int`, `float`, `char`, …) are always labeled **Keyword** in both C and Python — never mixed with Identifier (regression-guarded by the deep audit).
 - **VS Code–grade IDE**: activity bar, file explorer, syntax-highlighted editor, bottom + side panels, status bar, light/dark theme, command palette (`Ctrl+Shift+P`).
 - **Resizable panels**: drag the border handles to resize the explorer, side, and bottom panels.
 - **Real execution terminal**: gcc compilation with real diagnostics, program output, exit codes, command history, maximize, clear.
@@ -152,7 +153,8 @@ make check         # lint + test
 ```
 
 - **Backend** — 60 pytest tests: pipeline goldens, precedence/associativity, semantic errors, subset boundary, output fidelity, schema parity, security hardening, catalog gate, Python type-hinting.
-- **E2E** — 14 Playwright tests in a real Chromium: every sample compiles, every tab/button/toggle, resizable panels, token count, real C & Python execution in the terminal, resizable panels, SC-010 (all phases render < 2 s).
+- **E2E** — 14 Playwright tests in a real Chromium: every sample compiles, every tab/button/toggle, resizable panels, token count, real C & Python execution in the terminal, SC-010 (all phases render < 2 s).
+- **Live audits** — Playwright scripts against a running server: `alive_audit.mjs` (C/Python + pseudo-C fallback), `deep_audit.mjs` (search/outline/minimap/debugger/problems/**datatype classification — 14 checks**), `feat_audit.mjs` (menus/commands/theme/panels — 26 checks).
 - **CI (GitHub Actions)** runs `make test` on push/PR from a clean bootstrap.
 
 ---
@@ -236,9 +238,60 @@ Open this repo in VS Code:
 
 ## 🤝 Contributing
 
-1. **The `compiler/Makefile` recipe is authoritative** — `lex lexer.l; yacc -d -v parser.y; gcc -w -o compiler y.tab.c` (no `-ll`; it links `libl`'s `main` and fails). The binary reads source from **stdin**.
-2. Edit the single-file IDE in **`frontend/index.html`**, then sync all byte-identical copies — `index.html`, `index121.html`, and `frontend/dist/index.html` (e.g. `cp frontend/index.html index.html index121.html frontend/dist/index.html`). Run `cd frontend && npm run build` to refresh `frontend/dist/`.
-3. Run `make test` before pushing — all suites must be green. Quick live checks: `node frontend/alive_audit.mjs`, `node frontend/feat_audit.mjs`, `node frontend/deep_audit.mjs` (against `localhost:5000`).
+**How to contribute to this compiler project.**
+
+### Workflow
+1. **Fork + branch**: create a feature/bug branch off `main`, keep it small and focused.
+2. **Contribute to the compiler itself** (the native C pipeline):
+   - Edit the token patterns in `compiler/lexer.l` and the grammar/semantics/IR in `compiler/parser.y`.
+   - Rebuild: `make -C compiler` (recipe: `lex lexer.l; yacc -d -v parser.y; gcc -w -o compiler y.tab.c` — **no `-ll`**, it links `libl`'s `main` and fails). The binary reads source from **stdin** (`./compiler < file.c`).
+   - Keep PHASE 0–4 section output stable — backend `lexer_parser.py` parses it.
+3. **Contribute to the in-browser engine** (primary engine, the panels you see):
+   - Edit the single-file IDE in **`frontend/index.html`**, then sync all byte-identical copies — `index.html`, `index121.html`, and `frontend/dist/index.html` (e.g. `cp frontend/index.html index.html index121.html frontend/dist/index.html`). Then `cd frontend && npm run build` to refresh `frontend/dist/`.
+4. **Contribute to the backend** (Python): routes in `backend/app.py`, pipelines (C: `lexer_parser.py`/`tree_builder.py`, Python: `python_analyzer.py`), schema in `backend/contract.py`.
+5. **Tests are mandatory.** Keep every suite green before pushing:
+   - Backend: `venv/bin/python -m pytest backend/tests -q` (60 tests).
+   - E2E: `cd frontend && npx playwright test --config e2e/playwright.config.ts` (14 tests).
+   - Live audits (server must be running via `make run`): `node frontend/alive_audit.mjs`, `node frontend/feat_audit.mjs`, `node frontend/deep_audit.mjs`.
+   - One-shot: `make test`.
+6. **Lint** with `make lint` (`ruff check backend`) — zero findings before push.
+7. Open a Pull Request against `main`; CI runs `make test` from a clean bootstrap.
+
+### House rules
+- **Accuracy is contract-grade**: any change to the supported subset (§7) must update `docs/SRS.md` and the sample catalog (`backend/tests/test_catalog.py`).
+- **Never break offline mode**: the in-browser engine is the source of truth for panels; the backend is a best-effort complement — both must stay functional.
+- Keep the four IDE copies byte-identical (a CI-safe `md5sum` check: `index.html` == `index121.html` == `frontend/index.html` == `frontend/dist/index.html`).
+- Update `docs/GUIDE.md` / `docs/SRS.md` and this README when you change behavior a user would notice.
+
+---
+
+## 🚀 Deployment
+
+CompileViz is **two cooperating layers**, so deployment strategy depends on which parts need to run in production.
+
+### Static hosting (GitHub Pages / Vercel / Netlify)
+The **IDE itself is fully static and self-contained** — a single `index.html` with zero runtime
+dependencies. You can host the frontend alone on **GitHub Pages, Vercel, or Netlify** in seconds:
+- Build: `cd frontend && npm ci && npm run build` → serves `frontend/dist/index.html`.
+- **Important:** on static hosting the Flask backend won't be reachable, so the IDE runs fully on
+  the **in-browser hybrid engine** — every panel still compiles with 100% accuracy (tokens,
+  symbols, parse tree, IR, optimizer, debugger) and C/Python **execute via the built-in VM**.
+  The status bar shows `⚡ backend: offline` and `Run` uses the VM fallback — the demo still works.
+- This is the simplest option if your audience only needs the visualization/VM experience.
+
+### Full-stack deployment (server needed)
+Real `gcc`/`python3` execution in the terminal and the genuine native lexer/parser require the
+**Flask backend** on a Unix-like server with `flex`, `bison`, `gcc`, `python3`:
+- **Render / Railway / Heroku / a VPS / AWS/GCP** — run `backend/wsgi.py` (Waitress) behind a
+  reverse proxy on port 5000 and serve the built `frontend/dist/index.html` from Flask.
+- Best experience: the status bar flips to `⚡ backend: online` and `gcc`/`python3` run for real.
+- Note: static-only hosts (Pages/Vercel) **cannot** run the Flask backend, so for full execution
+  prefer a platform that runs arbitrary server processes.
+
+### Recommendation
+Start with **static hosting** for a zero-cost live demo (offline engine + VM execution works fine),
+then move to **Render/Railway/VPS** if you want genuine compiled-program execution and the real
+native token/IR pipeline in the `backend` command.
 
 ---
 

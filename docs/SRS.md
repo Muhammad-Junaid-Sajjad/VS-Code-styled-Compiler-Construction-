@@ -297,6 +297,7 @@ canonical `CompileResponse`.
 | FR-034 | P1 | Run button shows a loading state while compiling. |
 | FR-035 | P1 | Phase-flow panel with animated phase indicators (Waiting → Running → Done → Error). |
 | FR-036 | P1 | Tokens panel color-codes tokens by type with line numbers. |
+| FR-036a | P1 | **Datatype names (`int`, `float`, `char`, `double`, `void`, `bool`, `str`, …) are always classified `KEYWORD`** in both C and Python — never mixed with `IDENTIFIER` (fix 2026-08, guarded by `deep_audit.mjs`). |
 | FR-037 | P1 | Parse Tree panel shows a collapsible tree equal to the parser's derivation tree (with semantic annotations), never a fabricated tree. |
 | FR-038 | P1 | Symbol Table panel is sortable with name/type/scope/value/line; **value is the compile-time constant initializer or `null`** (never a guessed value). |
 | FR-039 | P1 | IR Code panel shows three-address code with line numbers and highlighting. |
@@ -501,7 +502,7 @@ The project's test strategy is driven by the root `Makefile` and is fully automa
 **Live verification (final hardening pass):** C and Python both compile with **0 errors**, all
 8 panels populate, and both run in the terminal correctly (C prints `x/y/z`, exit 0; Python
 prints `Hello, World!` and `30`). Test suite: **60 pytest + 14 Playwright E2E — all passing**.
-Live Playwright audits: **alive 26 · deep 12 · feat 26 — all green**.
+Live Playwright audits: **alive 26 · deep 14 · feat 26 — all green** (deep includes a datatype-classification guard: `int`/`float`/`char`/… are always `keyword` in C **and** Python, never `identifier`).
 
 ---
 
@@ -549,7 +550,7 @@ Live Playwright audits: **alive 26 · deep 12 · feat 26 — all green**.
 | FR-007 … FR-012 (Python pipeline) | `backend/python_analyzer.py` | `backend/tests/test_python_*.py` |
 | FR-013 … FR-024 (API + error model) | `backend/app.py`, `backend/contract.py` | `backend/tests/test_smoke.py`, `test_security.py`, `test_schema_parity.py` |
 | FR-025 … FR-029 (autocomplete) | `index.html` (IDE completion) | E2E: `frontend/e2e/*.spec.ts` |
-| FR-030 … FR-044 (IDE) | `index.html` | E2E: `frontend/e2e/ui.spec.ts` |
+| FR-030 … FR-044 (IDE) | `index.html` | E2E: `frontend/e2e/ui.spec.ts` + deep audit (FR-036a datatype classification) |
 | FR-045 … FR-047 (frontend build) | `frontend/vite.config.ts`, `frontend/package.json` | CI build + `make frontend-build` |
 | FR-048 … FR-058 (build/CI/security) | `Makefile`, `compiler/Makefile`, `.github/workflows/ci.yml`, `backend/app.py` | `make test`, CI on push/PR |
 | FR-059 (catalog) | `index.html` (samples) | `backend/tests/test_catalog.py`, E2E |

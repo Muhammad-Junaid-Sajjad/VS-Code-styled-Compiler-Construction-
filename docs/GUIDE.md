@@ -143,7 +143,7 @@ make test
 | Backend| `venv/bin/python -m pytest backend/tests -q`              | 60 | token goldens, precedence, semantic errors, schema, security |
 | E2E    | `cd frontend && npx playwright test --config e2e/playwright.config.ts` | 14 | real browser: compile, panels, terminal, SC-010 |
 | Live   | `node frontend/alive_audit.mjs`                           | 27    | in-browser compile+run, C/Python + pseudo-C fallback |
-| Live   | `node frontend/deep_audit.mjs`                            | 12    | search, outline+line numbers, minimap, debugger, problems |
+| Live   | `node frontend/deep_audit.mjs`                            | 14    | search, outline+line numbers, minimap, debugger, problems, datatype classification |
 | Live   | `node frontend/feat_audit.mjs`                            | 26    | menus, commands, theme, palette, panels           |
 | Status | `curl http://localhost:5000/api/status`                  | —     | compiler binary found + languages ready |
 

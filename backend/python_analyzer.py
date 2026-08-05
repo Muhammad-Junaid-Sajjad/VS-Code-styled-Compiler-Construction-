@@ -13,7 +13,8 @@ PY_KEYWORDS = {
     'for', 'from', 'global', 'if', 'import', 'in', 'is', 'lambda', 'nonlocal',
     'not', 'or', 'pass', 'raise', 'return', 'try', 'while', 'with', 'yield',
 }
-PY_BUILTINS = {'print', 'len', 'int', 'float', 'str', 'input', 'range', 'list', 'dict', 'set', 'tuple'}
+PY_BUILTINS = {'print', 'len', 'input', 'range'}
+PY_TYPES = {'int', 'float', 'str', 'bool', 'list', 'dict', 'set', 'tuple'}
 
 
 def analyze_python(source: str) -> dict:
@@ -73,6 +74,8 @@ def _tokenize(source: str) -> list:
 def _token_class(t):
     if t.type == tokenize.NAME:
         if t.string in PY_KEYWORDS:
+            return 'KEYWORD'
+        if t.string in PY_TYPES:
             return 'KEYWORD'
         if t.string in PY_BUILTINS:
             return 'BUILTIN'

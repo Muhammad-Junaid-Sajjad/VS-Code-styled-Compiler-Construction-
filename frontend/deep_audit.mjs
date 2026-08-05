@@ -68,6 +68,17 @@ await sleep(150);
 const cur = (await p.locator('#sL').textContent()).trim();
 rec('statusbar shows Ln/Col', /Ln\s+\d+/.test(cur), cur);
 
+console.log('\n── G. DATATYPES always keyword ──');
+const dtCls = await p.evaluate(() => {
+  const dt = ['int','float','double','char','void','long','short','unsigned','bool','str'];
+  const scan = (code, lang) => tokenize(code, lang)
+    .filter(t => dt.includes(t.value))
+    .every(t => t.type === 'keyword');
+  return { py: scan(files['main.py'], 'python'), c: scan('int x; float y; char c; double d;', 'c') };
+});
+rec('datatypes classify keyword in C', dtCls.c === true, `c=${dtCls.c}`);
+rec('datatypes classify keyword in Python', dtCls.py === true, `py=${dtCls.py}`);
+
 await b.close();
 const fails = results.filter(r => !r.ok).length;
 console.log(`\n════╡ DEEP AUDIT: ${results.length} checks, ${results.length - fails} passed, ${fails} failed ╞════`);
