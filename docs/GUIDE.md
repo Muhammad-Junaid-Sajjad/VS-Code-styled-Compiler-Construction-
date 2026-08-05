@@ -16,15 +16,24 @@ in its own panel:
 Lexical → Syntax → Semantic → Intermediate Code (IR) → (optional) real execution
 ```
 
-The three layers (and how code flows through them):
+The IDE is **hybrid**: a self-contained in-browser engine is the primary, always-on compiler that
+fills every panel instantly and offline; the Flask backend provides the *real* native pipeline and
+real code execution on a best-effort basis when reachable. `Run` uses genuine `gcc`/`python3` when
+online and falls back to the in-browser VM otherwise.
 
 ```
 Browser (index.html)
-   │  POST /api/compile  { "code", "language" }
+   │  PRIMARY ENGINE (JS, every compile, offline):
+   │     tokenize → build → parse → typeCheck → genIR → optimize → makeVM
+   │     fills tokens/symbols/parse/ir/opt/debug/insights panels
+   │  best-effort (when Flask reachable):
+   │     GET /api/status        → status-bar badge "backend: online"
+   │     POST /api/run          → code_runner (gcc / python3) real execution
+   │     POST /api/compile      → real tokens/IR/errors (via `backend` command)
    ▼
 Flask backend  (backend/)
-   │  C:    compiler_runner → native compiler binary  (compiler/)
-   │  C:    lexer_parser + tree_builder
+   │  C:      compiler_runner → native compiler binary  (compiler/)
+   │  C:      lexer_parser + tree_builder
    │  Python: python_analyzer (stdlib tokenize + ast)
    │  POST /api/run  → code_runner (gcc / python3) for real execution
    ▼

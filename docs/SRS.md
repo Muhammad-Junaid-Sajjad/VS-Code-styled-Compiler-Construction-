@@ -172,41 +172,61 @@ browser is needed.
 
 # 3. System Architecture
 
-CompileViz is a client/server system with a native subprocess compiler core (C) and an
-in-process parser (Python).
+CompileViz is a **hybrid** client/server system. The browser ships a complete, self-contained
+compilation engine (lexer, parser, semantic/type checker, three-address IR generator, optimizer,
+and a step-debuggable VM) that is the **primary engine**, so the IDE renders every analysis panel
+instantly, offline, with deterministic data. The Flask backend hosts the **real** native pipeline
+(C via `compiler/`, Python via stdlib `ast`) and real code execution; when the server is reachable,
+`run` routes to genuine `gcc`/`python3` execution and a `backend` command surfaces the real
+pipeline's tokens/IR/errors. The in-browser engine and the backend are **two cooperating engines**
+with a fallback so the demo never breaks.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
 │                     BROWSER  (single-file IDE, index.html)                 │
-│   editor · panels · terminal · theme · command palette                     │
-└───────────────────────────────────┬───────────────────────────────────────┘
-                                    │  HTTP (JSON)
-┌───────────────────────────────────▼───────────────────────────────────────┐
+│   PRIMARY ENGINE (in JavaScript, runs every time):                         │
+│     tokenize → buildSym → parse → typeCheck → genIR → optimize → makeVM    │
+│   panels: tokens · symbols · parse · ir · opt · debug(VM) · insights       │
+│   + terminal (run → real backend when online, VM fallback otherwise)       │
+└───────────────────────────────┬────────────────────────────────────────────┘
+                                │  HTTP (JSON) — best-effort, offline-safe
+┌───────────────────────────────▼────────────────────────────────────────────┐
 │                   Flask BACKEND (Python)                        backend/   │
-│   /api/compile · /api/run · /api/tokenize · /api/status                   │
+│   /api/status · /api/run · /api/compile · /api/tokenize                   │
 │   lexer_parser · tree_builder · python_analyzer · code_runner · contract  │
-└───────────────────────────────────┬───────────────────────────────────────┘
-                                    │  stdin → stdout (bounded, timed, capped)
-┌───────────────────────────────────▼───────────────────────────────────────┐
-│                  NATIVE COMPILER (Lex/Yacc/GCC)   compiler/               │
+└───────────────────────────────┬────────────────────────────────────────────┘
+                                │  stdin → stdout (bounded, timed, capped)
+┌───────────────────────────────▼────────────────────────────────────────────┐
+│                  NATIVE COMPILER (Lex/Yacc/gcc)   compiler/                │
 │   lexer.l + parser.y  →  PHASE 0–4 text output                             │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Compile request flow (C):**
-1. Browser sends `POST /api/compile {code, language:"c"}`.
-2. Backend acquires a concurrency lock; feeds source to `compiler/compiler` **via stdin**
-   inside a temp working directory with resource caps.
-3. `lexer_parser.py` parses raw text into `tokens`, `symbol_table`, `ir_code`, `errors`, `warnings`.
-4. `tree_builder.py` builds the derivation tree.
-5. One canonical `CompileResponse` is returned as JSON.
+**Analysis pipeline (in-browser, always-on):** every compilation runs the single-file JS engine
+first: `tokenize()` → `buildSym()` → `parse()` → `typeCheck()` → `genIR()` → `optimize()` →
+`makeVM()`. These populate the Tokens, Symbols, Parse Tree, IR, Optimizer, Debug (VM), Insights,
+and Problems panels, plus the status bar counts. This path needs no server and is the source of
+truth for the interactive panels.
 
-**Compile request flow (Python):**
-- Browser ships `language:"python"`; `python_analyzer.py` uses stdlib `tokenize` (tokens) and
-  `ast` (tree), building symbol table + IR with the same schema as C.
+**Backend probe (best-effort):** on load the IDE pings `GET /api/status`. If the Flask server
+answers `running`, the status bar switches to `⚡ backend: online` and `Run` becomes a **real**
+execution:
 
-**Execute flow:** `POST /api/run` → `code_runner.py` runs `gcc -Wall`/`./main` (C) or `python3`
-(Python), streaming output, exit code, and errors to the terminal.
+**Execute flow (`runProg`, hybrid, auto-fallback):**
+1. If backend online, `POST /api/run {code, language}` → `code_runner.py` invokes real tooling
+   (`gcc -Wall`/`./main` for C, `python3` for Python), streaming output, exit code, and errors.
+2. If the backend is offline OR rejects the code as invalid real C (e.g. pseudo-C samples without `main`), the IDE
+   falls back to the in-browser VM (`runVM()`), which still prints `[state]` and an exit code — the
+   demo never breaks offline.
+3. The `backend` (terminal) command runs a real `POST /api/compile` and prints the backend's token count,
+   symbol table size, IR, and errors; any backend errors are merged into the Problems panel.
+
+**Real backend compile request flow (C):** `POST /api/compile {code, language:"c"}` → lock →
+`compiler/compiler` via stdin in a capped temp dir → `lexer_parser.py` → `tree_builder.py` → one
+canonical `CompileResponse`.
+
+**Compile request flow (Python):** `language:"python"` → `python_analyzer.py` (stdlib `tokenize` +
+`ast`) building tokens/symbols/IR with the same schema.
 
 ---
 

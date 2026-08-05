@@ -251,6 +251,7 @@ table.tb{width:100%;border-collapse:collapse;font-size:12px}
   <span class="sb">⎇ main</span><span class="sb click" id="sN">⊘ 0 ⚠ 0</span><span class="sp"></span>
   <span class="sb" id="sT">0 tokens</span><span class="sb" id="sS">0 symbols</span><span class="sb" id="sE">0 errors</span>
   <span class="sb" id="sL">Ln 1, Col 1</span><span class="sb">UTF-8</span><span class="sb" id="sG">C</span>
+  <span class="sb" id="sBe">⚙ engine: in-browser</span>
   <span class="sb click" id="sTh">🌙 Dark</span>
 </footer>
 <div id="hov"></div>
@@ -260,8 +261,37 @@ table.tb{width:100%;border-collapse:collapse;font-size:12px}
 'use strict';
 window.onerror=function(msg,src,line,col){var b=document.getElementById('errBanner');if(b){b.style.display='block';b.textContent='JS Error: '+msg+' (line '+line+')';}return false;};
 var $=function(i){return document.getElementById(i);};
-var curFile='main.c',curLang='c',curPanel='tokens',R={tok:[],sym:[],ast:null,ir:[],opt:[],optLog:[],errs:[],warns:[],nodes:0,errLines:new Set()},mod={},VM=null,bps=new Set(),dbgUseOpt=true,FS=13,LH=20.8,compiling=false;
+var curFile='main.c',curLang='c',curPanel='tokens',R={tok:[],sym:[],ast:null,ir:[],opt:[],optLog:[],errs:[],warns:[],nodes:0,errLines:new Set()},mod={},VM=null,bps=new Set(),dbgUseOpt=true,FS=13,LH=20.8,compiling=false,backendOn=false,beTried=false;
 var files={'main.c':'int x = 5;\nint y = 10;\nint z = x + y * 2;\n\nif (z > 10) {\n    z = z - 1;\n} else {\n    z = z + 1;\n}\n\nwhile (z > 0) {\n    z = z - 1;\n}','main.py':'def square(n: int) -> int:\n    return n * n\n\nx: int = 5\ny: int = 10\nresult: float = 3.14\nz: int = x + y\n\nif z > 10:\n    temp = z * 2\n    print(temp)\nelse:\n    z = z - 1\n\nfor i in range(5):\n    sq = square(i)\n\nmsg = \'Hello, World!\'\nprint(msg)'};
+function pingBackend(){
+ if(beTried)return;beTried=true;
+ try{
+  fetch('/api/status').then(function(r){return r.json()}).then(function(j){
+   if(j&&j.server==='running'){backendOn=true;var b=$('sBe');if(b){b.textContent='⚡ backend: online';b.style.color='var(--ok)'}}
+  }).catch(function(){});
+ }catch(e){}
+}
+function runReal(prog){
+ return fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:prog.code,language:prog.lang})})
+  .then(function(r){return r.json()})
+  .catch(function(){return null});
+}
+function runBackend(o){
+ termLog('> POST /api/compile ('+curLang.toUpperCase()+') — real backend pipeline','tac');
+ fetch('/api/compile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:$('code').value,language:curLang})})
+  .then(function(r){return r.json()}).then(function(j){
+   if(!j){termLog('  backend unreachable — offline fallback active','te');return}
+   var tok=0;if(j.tokens)tok=j.tokens.length;
+   termLog('  [lexer] '+tok+' tokens · '+(j.raw_output?'raw output present':'')+' · lexer='+(j.phases&&j.phases.lexer),'tdm');
+   if(j.symbol_table)termLog('  [symbols] '+j.symbol_table.length+' entries in backend symbol table','tdm');
+   var irn=0;if(j.ir_code)irn=j.ir_code.length;
+   termLog('  [IR] '+irn+' backend IR instruction(s)','tdm');
+   var e=0;if(j.errors)e=j.errors.length;
+   termLog('  [errors] '+e+' reported by real compiler'+(e?' — '+esc(j.errors[0].message):''),(e?'te':'tok'));
+   if(o&&j.ir_code&&j.ir_code.length){termLog('  --- backend IR ---','tdm');j.ir_code.slice(0,20).forEach(function(x){termLog('    '+esc(x),'')})}
+   if(j.errors&&j.errors.length){R.errs=j.errors.map(function(er){return'L'+(er.line||0)+': '+er.message});renderPanel()}
+  }).catch(function(){termLog('  backend unreachable — falling back to in-browser engine','te')});
+}
 var CKW=new Set('auto break case char const continue default do double else enum extern float for goto if inline int long register restrict return short signed sizeof static struct switch typedef union unsigned void volatile while'.split(' '));
 var PKW=new Set('False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield'.split(' '));
 function tokenize(code,lang){var kw=lang==='c'?CKW:PKW,T=[],i=0,line=1,col=1;
@@ -648,8 +678,20 @@ function compile(manual){
   $('prog').classList.remove('run');$('cbtn').classList.remove('ld');
   var st=$('stb');st.classList.remove('fl');void st.offsetWidth;st.classList.add('fl');
  },120)}
-function runProg(){var res=runVM(curOps()),out=res.out,state=res.state;
+function runProg(){
  termLog('> run '+curFile+(dbgUseOpt?' (optimized)':''),'tac');
+ if(backendOn){
+  runReal({code:$('code').value,lang:curLang}).then(function(j){
+   if(j&&j.error!=='compilation failed'&&!(j.output===''&&j.error)){
+    if(j.command)termLog('  $ '+esc(j.command),'tdm');
+    var out=(j.output||'').split('\n');
+    out.forEach(function(l){termLog('  '+esc(l),'')});
+    termLog('exit code '+(j.exit_code===undefined?0:j.exit_code),(j.exit_code===0?'tok':'te'));
+    $('pExe').textContent='done';toast('Executed via backend (real '+curLang.toUpperCase()+')','i');switchPanel('terminal');
+   }else vmRun();
+  });
+ }else vmRun()}
+function vmRun(){var res=runVM(curOps()),out=res.out,state=res.state;
  out.forEach(function(l){termLog('  '+esc(l),'')});
  var st=Object.entries(state).filter(function(en){return!/^t\d+$/.test(en[0])}).map(function(en){return en[0]+'='+fmtV(en[1])}).join(' ');
  termLog('[state] '+(st||'(empty)'),'tdm');termLog('exited code 0','tok');
@@ -659,7 +701,8 @@ function termCmd(raw){var line=raw.trim();termLog('<span class="tac">> ~/compile
  var parts=line.split(/\s+/),c=parts[0],a=parts.slice(1);
  switch((c||'').toLowerCase()){
   case'':break;
-  case'help':termLog('help · compile · run · step · tokens · symbols · ir · opt · outline · ls · cat <f> · echo · theme · clear · neofetch','tdm');break;
+  case'help':termLog('help · compile · run · step · tokens · symbols · ir · opt · outline · ls · cat <f> · echo · theme · backend · clear · neofetch','tdm');break;
+ case'backend':runBackend({showAll:true});break;
   case'clear':$('to').innerHTML='';break;
   case'compile':compile(false);break;
   case'run':runProg();break;
@@ -776,6 +819,7 @@ document.addEventListener('keydown',function(e){
 window.addEventListener('resize',drawMM);
 window.addEventListener('load',function(){
  $('code').value=files['main.c'];compile(false);switchPanel('tokens');
+ pingBackend();
  termLog('MiniCompiler IDE v5.2 LEGENDARY — X-CORE online','tac');
  termLog('Moat: <span class="tok">self-explaining · self-optimizing · step-debuggable</span> · type help','tdm');
  setTimeout(function(){$('splash').classList.add('off');setTimeout(function(){var s=$('splash');if(s)s.remove()},600)},1100)});

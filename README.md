@@ -73,12 +73,20 @@ Type these in the **TERMINAL** tab:
 
 ```text
 help            list all commands
-run             compile & run the current code (gcc / python3)
-run hello.py    load & run a sample
-samples         list all samples
-compile         run the 4-phase compiler
-lang c|py       switch language
+compile         run the 4-phase in-browser compiler
+run             compile & run — real gcc/python3 via backend, VM fallback
+step            single-step the VM in the Debug tab (breakpoints)
+tokens          print the token stream
+symbols         print the symbol table
+ir              print the three-address IR
+opt             print optimizer transformations
+outline         print functions + line numbers
+ls              list files
+cat <file>      show a file's raw source
+echo <text>     echo text
 theme           toggle light/dark
+backend         probe the real Flask compiler (tokens/IR/errors via /api/compile)
+neofetch        about this IDE
 clear           clear the terminal
 ```
 
@@ -98,15 +106,23 @@ clear           clear the terminal
 
 ## 🏗️ Architecture
 
+**Hybrid engine.** The browser carries its own complete compiler (lexer → parser → type checker →
+IR → optimizer → step-debuggable VM) that renders every panel instantly and offline. The Flask
+backend hosts the *real* native pipeline and real code execution; when reachable, `Run` uses genuine
+`gcc`/`python3` and `backend` surfaces the real compiler's IR/errors, with automatic fallback so
+nothing breaks offline.
+
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
 │                        BROWSER  (single-file IDE)                          │
-│   index.html  →  editor · panels · terminal · theme · command palette     │
+│   PRIMARY ENGINE (in-browser JS, always-on):                               │
+│   tokenize → buildSym → parse → typeCheck → genIR → optimize → makeVM     │
+│   editor · panels(tokens/symbols/parse/ir/opt/debug/insights) · terminal  │
 └───────────────────────────────────┬───────────────────────────────────────┘
-                                    │  HTTP (JSON)
+                                    │  HTTP (JSON) — best-effort, offline-safe
 ┌───────────────────────────────────▼───────────────────────────────────────┐
 │                       Flask BACKEND  (Python)                backend/     │
-│   /api/compile · /api/run · /api/tokenize · /api/status                  │
+│   /api/status · /api/run · /api/compile · /api/tokenize                  │
 │   lexer_parser · tree_builder · python_analyzer · code_runner            │
 └───────────────────────────────────┬───────────────────────────────────────┘
                                     │  stdin → stdout (bounded, timed)
