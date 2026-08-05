@@ -319,28 +319,41 @@ function dType(t){var m={keyword:'Keyword',ident:'Identifier',op:'Operator',sep:
 function tClass(t){var m={keyword:'tk-k',ident:'tk-i',op:'tk-o',sep:'tk-p',comment:'tk-c',pre:'tk-f',unk:'tk-e',number:'tk-n',string:'tk-s'};return m[t.type]||''}
 function tColor(t){var m={keyword:'#569cd6',ident:'#9cdcfe',op:'#d4d4d4',sep:'#898989',comment:'#6a9955',pre:'#e06c75',unk:'#f44336',number:'#b5cea8',string:'#ce9178'};return m[t.type]||'#ccc'}
 function buildSym(T,lang){var S=[],func=null;
- for(var i=0;i<T.length;i++){var t=T[i],n=T[i+1],n2=T[i+2];
-  if(lang==='c'&&t.type==='keyword'&&'int float double char void long short'.split(' ').indexOf(t.value)>=0&&n&&n.type==='ident'){
-   if(n2&&n2.value==='('){S.push({name:n.value,cat:'function',type:t.value,scope:'global',line:t.line});
-    var j=i+3,d=1;while(j<T.length&&d>0){if(T[j].value==='(')d++;else if(T[j].value===')'){d--;if(!d)break}
-     if('int float double char long'.split(' ').indexOf(T[j].value)>=0&&T[j+1]&&T[j+1].type==='ident')S.push({name:T[j+1].value,cat:'parameter',type:T[j].value,scope:n.value,line:T[j+1].line});j++;}
-    func=n.value;i=j;continue;}
-   S.push({name:n.value,cat:'variable',type:t.value,scope:func||'global',line:t.line});i++;continue;}
-  if(lang==='python'&&t.type==='keyword'&&t.value==='def'&&n&&n.type==='ident'){
-   var rt='None',k=i+2,dd=0;
-   while(k<T.length){if(T[k].value==='(')dd++;if(T[k].value===')'){dd--;if(!dd){k++;break}}k++;}
-   if(k<T.length&&T[k].value==='->'&&T[k+1])rt=T[k+1].value;
-   S.push({name:n.value,cat:'function',type:rt,scope:'global',line:t.line});func=n.value;
-   var j2=i+3,d2=1;while(j2<T.length&&d2>0){if(T[j2].value==='(')d2++;else if(T[j2].value===')'){d2--;if(!d2)break}
-    if(T[j2].type==='ident'&&(j2===i+3||T[j2-1].value===',')){var pt='any';if(T[j2+1]&&T[j2+1].value===':'&&T[j2+2])pt=T[j2+2].value;S.push({name:T[j2].value,cat:'parameter',type:pt,scope:n.value,line:T[j2].line});}j2++;}
-   i=j2;continue;}
-  if(lang==='python'&&t.type==='ident'&&n&&n.value===':'&&n2&&n2.type==='ident'&&['int','float','str','bool'].indexOf(n2.value)>=0){
-   if(!S.find(function(s){return s.name===t.value}))S.push({name:t.value,cat:'variable',type:n2.value,scope:func||'global',line:t.line});continue;}
-  if(lang==='python'&&t.type==='ident'&&n&&n.type==='op'&&n.value==='='&&!(n2&&n2.value==='=')){
-   if(!S.find(function(s){return s.name===t.value})&&!PKW.has(t.value)){var ty='any';
-    if(n2){if(n2.type==='number')ty=n2.value.indexOf('.')>=0?'float':'int';else if(n2.type==='string')ty='str';else if(n2.type==='ident'){var r=S.find(function(s){return s.name===n2.value});if(r)ty=r.type;}}
-    S.push({name:t.value,cat:'variable',type:ty,scope:func||'global',line:t.line});}}
- return S}}
+    var cts='int float double char void long short'.split(' ');
+    var pts='int float double char long'.split(' ');
+    for(var i=0;i<T.length;i++){
+      var t=T[i],n=T[i+1],n2=T[i+2];
+      if(lang==='c'&&t.type==='keyword'&&cts.indexOf(t.value)>=0&&n&&n.type==='ident'){
+        if(n2&&n2.value==='('){
+          var name=n.value,js=i+3,dep=1;
+          while(js<T.length&&dep>0){if(T[js].value==='(')dep++;else if(T[js].value===')')dep--;if(!dep)break;js++;}
+          S.push({name:name,cat:'function',type:t.value,scope:'global',line:t.line});
+          for(var pp=i+3;pp<js;pp++){if(pts.indexOf(T[pp].value)>=0&&T[pp+1]&&T[pp+1].type==='ident'){S.push({name:T[pp+1].value,cat:'parameter',type:T[pp].value,scope:name,line:T[pp+1].line});pp++;}}
+          func=name;i=js;continue;
+        }
+        S.push({name:n.value,cat:'variable',type:t.value,scope:func||'global',line:t.line});i+=2;continue;
+      }
+      if(lang==='python'&&t.type==='keyword'&&t.value==='def'&&n&&n.type==='ident'){
+        var name=n.value,rt='None',k=i+2,dd=0;
+        while(k<T.length){if(T[k].value==='(')dd++;if(T[k].value===')'){dd--;if(!dd){k++;break}}k++;}
+        if(k<T.length&&T[k].value==='->'&&T[k+1])rt=T[k+1].value;
+        S.push({name:name,cat:'function',type:rt,scope:'global',line:t.line});func=name;
+        var j2=i+3,d2=1;while(j2<T.length&&d2>0){if(T[j2].value==='(')d2++;else if(T[j2].value===')'){d2--;if(!d2)break}
+          if(T[j2].type==='ident'&&(j2===i+3||T[j2-1].value===',')){var pt='any';if(T[j2+1]&&T[j2+1].value===':'&&T[j2+2])pt=T[j2+2].value;S.push({name:T[j2].value,cat:'parameter',type:pt,scope:name,line:T[j2].line});}j2++;}
+        i=j2;continue;
+      }
+      if(lang==='python'&&t.type==='ident'&&n&&n.value===':'&&n2&&n2.type==='ident'&&['int','float','str','bool'].indexOf(n2.value)>=0){
+        if(!S.some(function(s){return s.name===t.value}))S.push({name:t.value,cat:'variable',type:n2.value,scope:func||'global',line:t.line});i+=3;continue;
+      }
+      if(lang==='python'&&t.type==='ident'&&n&&n.type==='op'&&n.value==='='&&!(n2&&n2.value==='=')){
+        if(!S.some(function(s){return s.name===t.value})&&!PKW.has(t.value)){var ty='any';
+          if(n2){if(n2.type==='number')ty=n2.value.indexOf('.')>=0?'float':'int';else if(n2.type==='string')ty='str';else if(n2.type==='ident'){var r=S.find(function(s){return s.name===n2.value});if(r)ty=r.type;}}
+          S.push({name:t.value,cat:'variable',type:ty,scope:func||'global',line:t.line});}
+        i+=2;continue;
+      }
+    }
+    return S;
+}
 function parse(T,lang){var p=0,errs=[],nodes=0;
  function pk(){return T[p]}function ad(){return T[p++]}function N(k,v,c){nodes++;return{k:k,v:v,c:c||[]}}
  function isTy(t){return t&&t.type==='keyword'&&'int float double char void long short unsigned signed'.split(' ').indexOf(t.value)>=0}
@@ -715,7 +728,7 @@ function termCmd(raw){var line=raw.trim();termLog('<span class="tac">> ~/compile
   case'ls':termLog('main.c  main.py','');break;
   case'cat':termLog(esc(files[a[0]]||'no such file'),'');break;
   case'echo':termLog(esc(a.join(' ')),'');break;
-  case'theme':setTheme(a[0]==='light'?'light':'dark');break;
+  case'theme':setTheme(a[0]==='light'?'light':a[0]==='dark'?'dark':(document.body.getAttribute('data-theme')==='dark'?'light':'dark'));break;
   case'neofetch':termLog('<span class="tac">  ###### </span> junaid@minicompiler · v5.2 LEGENDARY\n<span class="tac">  ###### </span> X-CORE: explain · optimize · step-debug · C+Python','');break;
   default:termLog('command not found: '+esc(c),'te')}}
 function toast(m,k){var d=document.createElement('div');d.className='toast '+(k||'');d.textContent=m;$('toasts').appendChild(d);setTimeout(function(){d.style.opacity='0';d.style.transition='opacity .3s';setTimeout(function(){d.remove()},300)},2600)}
