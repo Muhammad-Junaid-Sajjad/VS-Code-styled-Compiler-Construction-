@@ -32,5 +32,5 @@ jobs:
           cd frontend
           npx playwright install --with-deps chromium
 
-      - name: make test (pytest + vitest + Playwright E2E)
+      - name: make test (pytest + Playwright E2E)
         run: make test

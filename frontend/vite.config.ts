@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from 'vite';
 
 export default defineConfig({
   base: './',
@@ -6,10 +6,5 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: { '/api': 'http://localhost:5000' },
-  },
-  test: {
-    globals: true,
-    environment: 'jsdom',
-    include: ['tests/**/*.test.ts'],
   },
 });

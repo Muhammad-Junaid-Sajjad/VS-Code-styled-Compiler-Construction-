@@ -12,6 +12,8 @@ dist/
 node_modules/
 frontend/dist/
 frontend/build/
+frontend/test-results/
+frontend/playwright-report/
 *.log
 .env*
 coverage/

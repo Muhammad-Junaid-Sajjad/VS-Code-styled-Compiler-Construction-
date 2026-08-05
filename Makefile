@@ -46,28 +46,26 @@ run: setup-backend
 run-prod: setup-backend
 	$(VENV_PY) $(BACKEND)/wsgi.py
 
-## ── Test (FR-052) ──────────────────────────────────────────────────────────
+## ── Test ───────────────────────────────────────────────────────────────────
 test: compiler setup-backend setup-frontend
 	@$(VENV_PY) -m pytest $(BACKEND)/tests -q
-	@cd $(FRONTEND) && $(NPM) test -- --run
 	@$(MAKE) e2e
 
-## ── E2E (T055/T056, FR-052) ────────────────────────────────────────────────
+## ── E2E (Playwright, real browser against localhost:5000) ─────────────────
 e2e: frontend-build
 	@cd $(FRONTEND) && if [ -d node_modules/@playwright/test ]; then \
 		npx playwright test --config e2e/playwright.config.ts; \
 	else \
-		echo "E2E skipped: run 'cd frontend && npx playwright install chromium' first"; \
+		echo "E2E skipped: run 'cd frontend && npm ci && npx playwright install chromium' first"; \
 	fi
 
-## ── Frontend build (produces dist/ served by Flask; FR-045) ────────────────
+## ── Frontend build (single-file app copied into dist/; served by Flask) ───
 frontend-build:
 	@cd $(FRONTEND) && $(NPM) run build
 
-## ── Lint / Format / Check (T056b) ──────────────────────────────────────────
+## ── Lint / Format / Check ──────────────────────────────────────────────────
 lint:
 	@if command -v ruff >/dev/null 2>&1; then ruff check $(BACKEND); else echo "ruff not installed — pip install ruff"; fi
-	@if [ -f $(FRONTEND)/package.json ]; then cd $(FRONTEND) && npx tsc --noEmit; fi
 
 format:
 	@if command -v ruff >/dev/null 2>&1; then ruff format $(BACKEND); else echo "ruff not installed — pip install ruff"; fi
@@ -78,10 +76,10 @@ check: lint test
 clean:
 	-$(MAKE) -C $(COMPILER) clean 2>/dev/null || true
 	-rm -rf $(VENV_DIR)
-	-rm -rf $(FRONTEND)/dist $(FRONTEND)/node_modules
+	-rm -rf $(FRONTEND)/dist $(FRONTEND)/node_modules $(FRONTEND)/test-results
 	-rm -rf .pytest_cache backend/.pytest_cache
 	-find . -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
 	@echo "Cleaned."
 
 help:
-	@echo "Targets: all | setup | compiler | run | run-prod | test | clean | lint | format | check"
+	@echo "Targets: all | setup | compiler | run | run-prod | test | e2e | frontend-build | clean | lint | format | check"
