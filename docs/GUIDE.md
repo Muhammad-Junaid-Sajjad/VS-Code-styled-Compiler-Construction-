@@ -88,6 +88,9 @@ Project-Compiler/
 │   ├── vite.config.ts    Vite build → dist/
 │   ├── package.json      Vite + Playwright only
 │   ├── tsconfig.json
+│   ├── alive_audit.mjs   live compile+run audit (C/Python + pseudo-C fallback)
+│   ├── deep_audit.mjs    deep feature audit (search/outline/minimap/debugger/problems)
+│   ├── feat_audit.mjs    feature audit (menus, commands, theme, palette, panels)
 │   ├── README.md
 │   └── e2e/              ★ 14 Playwright tests (real browser)
 │
@@ -139,7 +142,13 @@ make test
 |--------|----------------------------------------------------------|-----|--------------------------------------------------|
 | Backend| `venv/bin/python -m pytest backend/tests -q`              | 60 | token goldens, precedence, semantic errors, schema, security |
 | E2E    | `cd frontend && npx playwright test --config e2e/playwright.config.ts` | 14 | real browser: compile, panels, terminal, SC-010 |
-| Status | `curl http://localhost:5000/api/status`                  | —   | compiler binary found + languages ready |
+| Live   | `node frontend/alive_audit.mjs`                           | 27    | in-browser compile+run, C/Python + pseudo-C fallback |
+| Live   | `node frontend/deep_audit.mjs`                            | 12    | search, outline+line numbers, minimap, debugger, problems |
+| Live   | `node frontend/feat_audit.mjs`                            | 26    | menus, commands, theme, palette, panels           |
+| Status | `curl http://localhost:5000/api/status`                  | —     | compiler binary found + languages ready |
+
+The live audit scripts drive a real browser (Playwright) against `http://localhost:5000` —
+start the server with `make run` first, then run each script from the `frontend/` directory.
 
 `make lint` runs `ruff check backend`; `make check` = lint + test.
 

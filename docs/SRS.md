@@ -457,6 +457,7 @@ resolution, classes, decorators, comprehensions, lambdas, generators, `async`/`a
 | Empty program (either language) | Handled with empty state; `200` + `success:false`. |
 | Undeclared variable / duplicate declaration | Semantic error with the correct line. |
 | Return-type mismatch / syntax error | Parser or semantic error with the correct line. |
+| C type not followed by an identifier (`int = ;`) | Parser error "Expected a variable name after 'int'…" — **never silently accepted as valid**. |
 | Python: unclosed string / bad indentation / out-of-scope name | Clear, line-numbered error. |
 | Missing compiler binary | "Compiler binary not found. Run `make` in compiler/ folder." |
 | Server not running | "Cannot reach Flask server…" clear user-facing message. |
@@ -500,6 +501,7 @@ The project's test strategy is driven by the root `Makefile` and is fully automa
 **Live verification (final hardening pass):** C and Python both compile with **0 errors**, all
 8 panels populate, and both run in the terminal correctly (C prints `x/y/z`, exit 0; Python
 prints `Hello, World!` and `30`). Test suite: **60 pytest + 14 Playwright E2E — all passing**.
+Live Playwright audits: **alive 26 · deep 12 · feat 26 — all green**.
 
 ---
 
